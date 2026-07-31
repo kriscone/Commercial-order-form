@@ -104,6 +104,26 @@ export const fallbackPricingConfig: PricingConfig = {
   locationMultipliers: Object.fromEntries(nycZipCodes.map((zip) => [zip, 2])),
 };
 
+const locationMultiplierExemptCodes = new Set([
+  "cad",
+  "roof",
+  "rcp",
+  "elevations",
+  "model_3d",
+  "video_bundle",
+  "video_portrait",
+  "video_horizontal",
+]);
+
+export function locationMultiplierForItem(
+  pricingItem: PricingItem | undefined,
+  locationMultiplier = 1,
+) {
+  return pricingItem && locationMultiplierExemptCodes.has(pricingItem.code)
+    ? 1
+    : locationMultiplier;
+}
+
 export function priceForItem(
   pricingItem: PricingItem | undefined,
   squareFeet: number,
@@ -134,7 +154,9 @@ export function priceForItem(
     subtotal += increments * pricingItem.incrementPrice;
   }
 
-  return Math.round(subtotal * locationMultiplier);
+  return Math.round(
+    subtotal * locationMultiplierForItem(pricingItem, locationMultiplier),
+  );
 }
 
 export function normalizeZipCode(value: string) {

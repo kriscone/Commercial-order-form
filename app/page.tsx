@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   fallbackPricingConfig,
+  locationMultiplierForItem,
   normalizeZipCode,
   priceForItem,
   type PricingConfig,
@@ -491,6 +492,10 @@ export default function Home() {
     item: (typeof customDeliverables)[number],
   ) {
     const pricingItem = pricingByCode.get(item.pricingCode);
+    const itemLocationMultiplier = locationMultiplierForItem(
+      pricingItem,
+      locationMultiplier,
+    );
     const requires3DTour = item.id === "tagging";
     const isDisabled =
       (floorPlanAddonIds.has(item.id) && !hasFloorPlanService) ||
@@ -521,12 +526,12 @@ export default function Home() {
           )}
           <small className="component-rate">
             {item.id === "tagging"
-              ? `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} base through 2,000 sq ft + ${money((pricingItem?.incrementPrice ?? 0) * locationMultiplier)}/additional 1,000 sq ft - available with 3D Tour options only`
+              ? `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} base through 2,000 sq ft + ${money((pricingItem?.incrementPrice ?? 0) * itemLocationMultiplier)}/additional 1,000 sq ft - available with 3D Tour options only`
               : item.type === "flat"
-              ? `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} flat`
+              ? `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} flat`
               : item.type === "half-acre"
-                ? `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} covers up to 1/2 acre + ${money((pricingItem?.incrementPrice ?? 0) * locationMultiplier)}/additional 1/2 acre`
-                : `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} base through 2,000 sq ft + ${money((pricingItem?.incrementPrice ?? 0) * locationMultiplier)}/additional 1,000 sq ft before marginal discounts`}
+                ? `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} covers up to 1/2 acre + ${money((pricingItem?.incrementPrice ?? 0) * itemLocationMultiplier)}/additional 1/2 acre`
+                : `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} base through 2,000 sq ft + ${money((pricingItem?.incrementPrice ?? 0) * itemLocationMultiplier)}/additional 1,000 sq ft before marginal discounts`}
           </small>
         </span>
         <b>{money(priceForCode(item.pricingCode))}</b>
@@ -645,7 +650,8 @@ export default function Home() {
                 />
                 {isNycPricing && (
                   <small className="nyc-pricing-message">
-                    NYC pricing applies: all services are priced at 2×.
+                    NYC pricing applies: onsite services are priced at 2×;
+                    production-only deliverables remain at standard pricing.
                   </small>
                 )}
               </label>
@@ -1096,7 +1102,7 @@ export default function Home() {
           </div>
           <div className="summary-metric">
             <span>Location pricing</span>
-            <strong>{isNycPricing ? "NYC · 2×" : "Standard"}</strong>
+            <strong>{isNycPricing ? "NYC · onsite 2×" : "Standard"}</strong>
           </div>
           <div className="summary-divider" />
           <div className="summary-breakdown">

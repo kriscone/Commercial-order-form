@@ -20,10 +20,45 @@ test("tier boundaries never reduce the total price", () => {
   }
 });
 
-test("NYC multiplier doubles the complete service price", () => {
+test("NYC multiplier doubles onsite services", () => {
   const standard = priceForItem(market, 30_001, tiers, 1);
   const nyc = priceForItem(market, 30_001, tiers, 2);
   assert.equal(nyc, standard * 2);
+});
+
+test("NYC multiplier does not affect production-only deliverables", () => {
+  for (const code of [
+    "cad",
+    "roof",
+    "rcp",
+    "elevations",
+    "model_3d",
+    "video_bundle",
+    "video_portrait",
+    "video_horizontal",
+  ]) {
+    const pricingItem = fallbackPricingConfig.items.find(
+      (candidate) => candidate.code === code,
+    );
+    assert.equal(
+      priceForItem(pricingItem, 30_001, tiers, 2),
+      priceForItem(pricingItem, 30_001, tiers, 1),
+      `${code} should remain at standard pricing`,
+    );
+  }
+});
+
+test("NYC multiplier still applies to site plans and aerial work", () => {
+  for (const code of ["site_plan", "aerial_mini", "aerial_full", "aerial_model"]) {
+    const pricingItem = fallbackPricingConfig.items.find(
+      (candidate) => candidate.code === code,
+    );
+    assert.equal(
+      priceForItem(pricingItem, 50_000, tiers, 2),
+      priceForItem(pricingItem, 50_000, tiers, 1) * 2,
+      `${code} should use NYC pricing`,
+    );
+  }
 });
 
 test("item tagging uses the $25 additional 1,000 sq ft rate", () => {
