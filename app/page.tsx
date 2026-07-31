@@ -264,6 +264,15 @@ const aLaCarteDeliverables = customDeliverables.filter((item) =>
 const customAddons = customDeliverables.filter(
   (item) => !aLaCarteIds.includes(item.id),
 );
+const floorPlanAddonIds = new Set([
+  "tagging",
+  "site-plan",
+  "cad",
+  "roof-plan",
+  "reflected-ceiling",
+  "3d-model",
+  "exterior-elevations",
+]);
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -314,6 +323,18 @@ export default function Home() {
     customTour === "photo-tour" ||
     (customTour === "components-only" &&
       selectedCustom.includes("photography"));
+  const hasFloorPlanService =
+    customTour === "walkthrough" ||
+    customTour === "floorplan-tour" ||
+    (customTour === "components-only" &&
+      selectedCustom.some((id) => id === "tour" || id === "planner"));
+
+  useEffect(() => {
+    if (hasFloorPlanService) return;
+    setSelectedCustom((current) =>
+      current.filter((id) => !floorPlanAddonIds.has(id)),
+    );
+  }, [hasFloorPlanService]);
 
   function priceForCode(code: string) {
     return priceForItem(
@@ -410,19 +431,30 @@ export default function Home() {
     item: (typeof customDeliverables)[number],
   ) {
     const pricingItem = pricingByCode.get(item.pricingCode);
+    const isDisabled =
+      floorPlanAddonIds.has(item.id) && !hasFloorPlanService;
     return (
       <label
         key={item.id}
-        className={selectedCustom.includes(item.id) ? "selected" : ""}
+        className={`${selectedCustom.includes(item.id) ? "selected" : ""} ${
+          isDisabled ? "disabled" : ""
+        }`}
+        aria-disabled={isDisabled}
       >
         <input
           type="checkbox"
           checked={selectedCustom.includes(item.id)}
+          disabled={isDisabled}
           onChange={() => toggleCustom(item.id)}
         />
         <span>
           <strong>{item.name}</strong>
           <small>{item.detail}</small>
+          {isDisabled && (
+            <small className="addon-requirement">
+              Requires a 3D tour or floor plan selection.
+            </small>
+          )}
           <small className="component-rate">
             {item.type === "flat"
               ? `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} flat`

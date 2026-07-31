@@ -952,6 +952,24 @@ legend {
   margin-top: 6px;
 }
 
+.custom-deliverables label.disabled {
+  background: #f2f3f3;
+  border-color: #d8dddd;
+  color: #77817e;
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.custom-deliverables label.disabled input {
+  cursor: not-allowed;
+}
+
+.custom-deliverables .addon-requirement {
+  color: #68736f;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
 .payment-toggle {
   display: grid;
   gap: 12px;
