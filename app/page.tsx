@@ -1125,19 +1125,6 @@ export default function Home() {
             scope-based item tagging. Final pricing is based on total measured
             area.
           </p>
-          <div className="summary-source">
-            <span>Pricing basis</span>
-            <strong>
-              {pricingConfig.source === "google-sheet"
-                ? "Live Google pricing sheet"
-                : "Built-in pricing fallback"}
-            </strong>
-            <small>
-              {isNycPricing
-                ? "NYC 2× location multiplier included"
-                : "Enter a project ZIP to confirm location pricing"}
-            </small>
-          </div>
         </aside>
       </form>
     </main>

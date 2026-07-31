@@ -28,6 +28,7 @@ test("server-renders the commercial order form", async () => {
   assert.match(html, /multiple emails, separated by a comma/i);
   assert.match(html, /Order details/i);
   assert.match(html, /summary-line-item/i);
+  assert.doesNotMatch(html, /Pricing basis|Built-in pricing fallback/i);
   assert.match(html, /FloorPlanOnline/i);
   assert.doesNotMatch(html, /loading skeleton|react-loading-skeleton/i);
 });
