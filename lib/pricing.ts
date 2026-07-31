@@ -80,7 +80,7 @@ export const fallbackPricingConfig: PricingConfig = {
     item("scan_3d", "ala_carte", "3D Tour/Scan", "per_1000_sqft", 2000, 399, 1000, 100, 20),
     item("floorplan_planner", "ala_carte", "2D/3D Floor Plans + Space Planner", "per_1000_sqft", 2000, 299, 1000, 100, 30),
     item("additional_photos", "addon", "Additional Pro photos (5)", "quantity", 0, 50, 1, 50, 5),
-    item("item_tagging", "addon", "Item Tagging", "per_1000_sqft", 2000, 100, 1000, 50, 10),
+    item("item_tagging", "addon", "Item Tagging", "per_1000_sqft", 2000, 100, 1000, 25, 10),
     item("site_plan", "addon", "Site Plan + 3D Site Planning Tool", "per_half_acre", 21780, 300, 21780, 100, 20),
     item("aerial_mini", "addon", "Aerial Mini Shoot", "flat", 0, 199, 0, 0, 30),
     item("aerial_full", "addon", "Aerial Full Shoot", "flat", 0, 299, 0, 0, 40),

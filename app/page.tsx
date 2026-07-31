@@ -469,7 +469,9 @@ export default function Home() {
             </small>
           )}
           <small className="component-rate">
-            {item.type === "flat"
+            {item.id === "tagging"
+              ? `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} base through 2,000 sq ft + ${money((pricingItem?.incrementPrice ?? 0) * locationMultiplier)}/additional 1,000 sq ft - available with 3D Tour options only`
+              : item.type === "flat"
               ? `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} flat`
               : item.type === "half-acre"
                 ? `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} covers up to 1/2 acre + ${money((pricingItem?.incrementPrice ?? 0) * locationMultiplier)}/additional 1/2 acre`

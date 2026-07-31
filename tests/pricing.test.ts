@@ -25,3 +25,11 @@ test("NYC multiplier doubles the complete service price", () => {
   const nyc = priceForItem(market, 30_001, tiers, 2);
   assert.equal(nyc, standard * 2);
 });
+
+test("item tagging uses the $25 additional 1,000 sq ft rate", () => {
+  const tagging = fallbackPricingConfig.items.find(
+    (item) => item.code === "item_tagging",
+  );
+  assert.equal(tagging?.basePrice, 100);
+  assert.equal(tagging?.incrementPrice, 25);
+});
