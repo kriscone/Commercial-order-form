@@ -923,6 +923,17 @@ export default function Home() {
                 Mobile phone
                 <input required name="phone" type="tel" placeholder="(555) 555-0100" />
               </label>
+              <label className="field-full">
+                Email for main on-site contact
+                <input
+                  required
+                  multiple
+                  name="contact-emails"
+                  type="email"
+                  placeholder="name@company.com, second@company.com"
+                />
+                <small>You can add multiple emails, separated by a comma.</small>
+              </label>
               <label>
                 Preferred service date
                 <input name="date" type="date" />
