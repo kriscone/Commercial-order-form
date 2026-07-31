@@ -1,5 +1,5 @@
 {
-  "name": "homediary-commercial-order-form",
+  "name": "floorplanonline-commercial-order-form",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -9,7 +9,8 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "vinext build && node --experimental-strip-types --test tests/pricing.test.ts tests/rendered-html.test.mjs",
+    "test:pricing": "node --experimental-strip-types --test tests/pricing.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 
-const title = "HomeDiary Commercial | Order Property Media & Plans";
+const title = "FloorPlanOnline Commercial | Order Property Media & Plans";
 const description =
   "Order commercial property photography, 2D and 3D floor plans, space planning, 3D tours, CAD files and item tagging.";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  const image = `${protocol}://${host}/og.png`;
-
   return {
     title,
     description,
@@ -19,13 +13,11 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: image, width: 1734, height: 907 }],
     },
     twitter: {
-      card: "summary_large_image",
+      card: "summary",
       title,
       description,
-      images: [image],
     },
   };
 }
