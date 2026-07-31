@@ -1049,6 +1049,56 @@ legend {
   margin: 16px 0 22px;
 }
 
+.summary-breakdown {
+  display: grid;
+  gap: 11px;
+}
+
+.summary-breakdown-title {
+  color: #a9bbb4;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.summary-line-item {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.summary-line-item span {
+  color: #dbe6e2;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.summary-line-item strong {
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.summary-line-item.addon span::before {
+  color: var(--mint);
+  content: "+ ";
+  font-weight: 800;
+}
+
+.summary-empty {
+  color: #a9bbb4;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.summary-total-divider {
+  margin-bottom: 18px;
+  margin-top: 20px;
+}
+
 .summary-total {
   display: grid;
   gap: 7px;

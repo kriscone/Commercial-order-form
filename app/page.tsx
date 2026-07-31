@@ -359,48 +359,88 @@ export default function Home() {
     const largeVenue = sqft > 10000;
     let amount = 0;
     let requiresReview = false;
+    const lineItems: Array<{
+      label: string;
+      price: number;
+      kind: "package" | "addon";
+    }> = [];
 
     if (packageId === "custom") {
       const selectedTour = customTourOptions.find(
         (option) => option.id === customTour,
       );
       if (selectedTour) {
-        amount += priceForItem(
+        const tourPrice = priceForItem(
           pricingByCode.get(selectedTour.pricingCode),
           sqft,
           pricingConfig.discountTiers,
           locationMultiplier,
         );
+        amount += tourPrice;
+        if (tourPrice > 0) {
+          lineItems.push({
+            label: selectedTour.name,
+            price: tourPrice,
+            kind: "package",
+          });
+        }
       }
       if (canAddPhotoPacks) {
-        amount +=
+        const photoPackPrice =
           additionalPhotoPacks *
           (pricingByCode.get("additional_photos")?.basePrice ?? 50) *
           locationMultiplier;
+        amount += photoPackPrice;
+        if (photoPackPrice > 0) {
+          lineItems.push({
+            label: `Additional Pro photos · ${additionalPhotoPacks} ${
+              additionalPhotoPacks === 1 ? "pack" : "packs"
+            }`,
+            price: photoPackPrice,
+            kind: "addon",
+          });
+        }
       }
       selectedCustom.forEach((id) => {
         const item = customDeliverables.find((entry) => entry.id === id);
         if (!item) return;
-        amount += priceForItem(
+        const itemPrice = priceForItem(
           pricingByCode.get(item.pricingCode),
           sqft,
           pricingConfig.discountTiers,
           locationMultiplier,
         );
+        amount += itemPrice;
+        lineItems.push({
+          label: item.name,
+          price: itemPrice,
+          kind: aLaCarteIds.includes(item.id) ? "package" : "addon",
+        });
       });
     } else {
       const selectedPackage = packages.find((pkg) => pkg.id === packageId);
       if (selectedPackage) {
-        amount = priceForItem(
+        const packagePrice = priceForItem(
           pricingByCode.get(selectedPackage.pricingCode),
           sqft,
           pricingConfig.discountTiers,
           locationMultiplier,
         );
+        amount = packagePrice;
+        lineItems.push({
+          label: `${selectedPackage.name} package`,
+          price: packagePrice,
+          kind: "package",
+        });
       }
     }
 
-    return { amount: Math.round(amount), requiresReview, largeVenue };
+    return {
+      amount: Math.round(amount),
+      requiresReview,
+      largeVenue,
+      lineItems,
+    };
   }, [
     additionalPhotoPacks,
     customTour,
@@ -1048,6 +1088,25 @@ export default function Home() {
             <strong>{isNycPricing ? "NYC · 2×" : "Standard"}</strong>
           </div>
           <div className="summary-divider" />
+          <div className="summary-breakdown">
+            <span className="summary-breakdown-title">Order details</span>
+            {estimate.lineItems.length > 0 ? (
+              estimate.lineItems.map((lineItem, index) => (
+                <div
+                  className={`summary-line-item ${lineItem.kind}`}
+                  key={`${lineItem.kind}-${lineItem.label}-${index}`}
+                >
+                  <span>{lineItem.label}</span>
+                  <strong>{money(lineItem.price)}</strong>
+                </div>
+              ))
+            ) : (
+              <p className="summary-empty">
+                Select services to see itemized pricing.
+              </p>
+            )}
+          </div>
+          <div className="summary-divider summary-total-divider" />
           <div className="summary-total">
             <span>Current estimate</span>
             <strong>{money(estimate.amount)}</strong>
