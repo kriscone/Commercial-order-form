@@ -272,6 +272,10 @@ const floorPlanAddonIds = new Set([
   "3d-model",
   "exterior-elevations",
 ]);
+const exclusiveAddonGroups = [
+  ["aerial-mini", "aerial-full", "aerial-model"],
+  ["cinematic-video", "cinematic-portrait", "cinematic-horizontal"],
+];
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -457,11 +461,18 @@ export default function Home() {
     if (id === "photography" && selectedCustom.includes(id)) {
       setAdditionalPhotoPacks(0);
     }
-    setSelectedCustom((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
-    );
+    setSelectedCustom((current) => {
+      if (current.includes(id)) {
+        return current.filter((item) => item !== id);
+      }
+      const exclusiveGroup = exclusiveAddonGroups.find((group) =>
+        group.includes(id),
+      );
+      const compatibleSelections = exclusiveGroup
+        ? current.filter((item) => !exclusiveGroup.includes(item))
+        : current;
+      return [...compatibleSelections, id];
+    });
   }
 
   function chooseCustomTour(id: TourOptionId) {
