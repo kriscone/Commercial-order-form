@@ -602,8 +602,8 @@ export default function Home() {
                 <p className="kicker">Project details</p>
                 <h2>Tell us about the property</h2>
                 <p>
-                  We currently scope and price one commercial property per
-                  order.
+                  We currently scope and price one commercial property parcel
+                  per order.
                 </p>
               </div>
             </div>
