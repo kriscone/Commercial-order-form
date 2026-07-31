@@ -1047,7 +1047,7 @@ export default function Home() {
             </p>
           )}
           <button className="primary-button" type="submit">
-            Confirm Service Request
+            Submit Service Request
           </button>
           <p className="fine-print">
             No charge is made when you submit. We will confirm the time and

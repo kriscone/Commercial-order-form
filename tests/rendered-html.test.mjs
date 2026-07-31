@@ -23,7 +23,7 @@ test("server-renders the commercial order form", async () => {
   const html = await response.text();
   assert.match(html, /Build your commercial property order/i);
   assert.match(html, /ZIP code/i);
-  assert.match(html, /Confirm Service Request/i);
+  assert.match(html, /Submit Service Request/i);
   assert.match(html, /FloorPlanOnline/i);
   assert.doesNotMatch(html, /loading skeleton|react-loading-skeleton/i);
 });
