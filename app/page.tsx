@@ -242,7 +242,7 @@ const customDeliverables = [
   {
     id: "cinematic-portrait",
     pricingCode: "video_portrait",
-    name: "Cinematic Video (Portrait)",
+    name: "Cinematic Video (Vertical)",
     detail:
       "We convert the property photos into a vertical video hosted on Vimeo for separate use.",
     type: "flat",

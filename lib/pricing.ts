@@ -91,7 +91,7 @@ export const fallbackPricingConfig: PricingConfig = {
     item("elevations", "addon", "Exterior Elevations", "per_1000_sqft", 2000, 120, 1000, 60, 90),
     item("model_3d", "addon", "3D Model", "per_1000_sqft", 2000, 250, 1000, 150, 100),
     item("video_bundle", "addon", "Cinematic Video Bundle", "flat", 0, 300, 0, 0, 110),
-    item("video_portrait", "addon", "Cinematic Video (Portrait)", "flat", 0, 150, 0, 0, 120),
+    item("video_portrait", "addon", "Cinematic Video (Vertical)", "flat", 0, 150, 0, 0, 120),
     item("video_horizontal", "addon", "Cinematic Video (Horizontal)", "flat", 0, 150, 0, 0, 130),
   ],
   discountTiers: [
