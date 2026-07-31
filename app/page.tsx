@@ -265,7 +265,6 @@ const customAddons = customDeliverables.filter(
   (item) => !aLaCarteIds.includes(item.id),
 );
 const floorPlanAddonIds = new Set([
-  "tagging",
   "site-plan",
   "cad",
   "roof-plan",
@@ -328,6 +327,9 @@ export default function Home() {
     customTour === "floorplan-tour" ||
     (customTour === "components-only" &&
       selectedCustom.some((id) => id === "tour" || id === "planner"));
+  const has3DTourService =
+    customTour === "walkthrough" ||
+    (customTour === "components-only" && selectedCustom.includes("tour"));
 
   useEffect(() => {
     if (hasFloorPlanService) return;
@@ -335,6 +337,13 @@ export default function Home() {
       current.filter((id) => !floorPlanAddonIds.has(id)),
     );
   }, [hasFloorPlanService]);
+
+  useEffect(() => {
+    if (has3DTourService) return;
+    setSelectedCustom((current) =>
+      current.filter((id) => id !== "tagging"),
+    );
+  }, [has3DTourService]);
 
   function priceForCode(code: string) {
     return priceForItem(
@@ -431,8 +440,10 @@ export default function Home() {
     item: (typeof customDeliverables)[number],
   ) {
     const pricingItem = pricingByCode.get(item.pricingCode);
+    const requires3DTour = item.id === "tagging";
     const isDisabled =
-      floorPlanAddonIds.has(item.id) && !hasFloorPlanService;
+      (floorPlanAddonIds.has(item.id) && !hasFloorPlanService) ||
+      (requires3DTour && !has3DTourService);
     return (
       <label
         key={item.id}
@@ -452,7 +463,9 @@ export default function Home() {
           <small>{item.detail}</small>
           {isDisabled && (
             <small className="addon-requirement">
-              Requires a 3D tour or floor plan selection.
+              {requires3DTour
+                ? "Requires a 3D Walkthrough Tour or 3D Tour/Scan."
+                : "Requires a 3D tour or floor plan selection."}
             </small>
           )}
           <small className="component-rate">
