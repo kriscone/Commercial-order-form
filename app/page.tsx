@@ -830,7 +830,7 @@ export default function Home() {
                     name="land-area"
                     type="number"
                     min={landAreaUnit === "acres" ? "0.1" : "1"}
-                    step={landAreaUnit === "acres" ? "0.01" : "100"}
+                    step={landAreaUnit === "acres" ? "0.01" : "1"}
                     value={landAreaValue}
                     onChange={(event) => {
                       const nextValue = Number(event.target.value);
