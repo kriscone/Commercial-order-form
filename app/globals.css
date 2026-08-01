@@ -1025,6 +1025,10 @@ legend {
   margin-bottom: 24px;
 }
 
+.payment-toggle-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .payment-toggle button {
   background: white;
   border: 1px solid var(--line);
@@ -1315,6 +1319,16 @@ legend {
   color: var(--mint);
   content: "+ ";
   font-weight: 800;
+}
+
+.summary-line-item.fee {
+  border-top: 1px dashed rgba(255, 255, 255, 0.18);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.summary-line-item.fee span {
+  color: #f0dfb3;
 }
 
 .summary-empty {

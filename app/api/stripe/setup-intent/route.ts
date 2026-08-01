@@ -12,6 +12,7 @@ type SetupRequest = {
   zipCode?: string;
   selection?: string;
   estimatedAmountCents?: number;
+  paymentMethod?: "card" | "bank";
 };
 
 function metadataValue(value: unknown) {
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SetupRequest;
     const billingName = body.billingName?.trim();
     const billingEmail = body.billingEmail?.trim();
+    const paymentMethod = body.paymentMethod === "bank" ? "bank" : "card";
 
     if (!billingName || !billingEmail || !billingEmail.includes("@")) {
       return NextResponse.json(
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
       zip_code: metadataValue(body.zipCode),
       selection: metadataValue(body.selection),
       estimated_amount_cents: metadataValue(body.estimatedAmountCents),
+      payment_method: paymentMethod,
     };
 
     const customer = await stripe.customers.create({
@@ -65,7 +68,13 @@ export async function POST(request: Request) {
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
       usage: "off_session",
-      payment_method_types: ["card"],
+      payment_method_types: [
+        paymentMethod === "bank" ? "us_bank_account" : "card",
+      ],
+      payment_method_options:
+        paymentMethod === "bank"
+          ? { us_bank_account: { verification_method: "instant" } }
+          : undefined,
       metadata: orderMetadata,
     });
 
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Stripe SetupIntent creation failed", error);
     return NextResponse.json(
-      { error: "Stripe could not start card verification." },
+      { error: "Stripe could not start payment verification." },
       { status: 500 },
     );
   }

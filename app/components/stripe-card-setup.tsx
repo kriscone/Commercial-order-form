@@ -14,6 +14,7 @@ type StripeCardSetupProps = {
   billingEmail: string;
   clientSecret: string;
   onComplete: () => void;
+  paymentMethod: "card" | "bank";
   publishableKey: string;
 };
 
@@ -21,6 +22,7 @@ function CardSetupForm({
   billingName,
   billingEmail,
   onComplete,
+  paymentMethod,
 }: Omit<StripeCardSetupProps, "clientSecret" | "publishableKey">) {
   const stripe = useStripe();
   const elements = useElements();
@@ -28,7 +30,7 @@ function CardSetupForm({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  async function authorizeCard() {
+  async function authorizePaymentMethod() {
     if (!stripe || !elements || !consent) return;
     setSubmitting(true);
     setErrorMessage("");
@@ -48,7 +50,10 @@ function CardSetupForm({
     });
 
     if (error) {
-      setErrorMessage(error.message ?? "Stripe could not verify this card.");
+      setErrorMessage(
+        error.message ??
+          `Stripe could not verify this ${paymentMethod === "card" ? "card" : "bank account"}.`,
+      );
       setSubmitting(false);
       return;
     }
@@ -58,7 +63,7 @@ function CardSetupForm({
       return;
     }
 
-    setErrorMessage("Card verification is still processing. Please try again shortly.");
+    setErrorMessage("Payment verification is still processing. Please try again shortly.");
     setSubmitting(false);
   }
 
@@ -74,9 +79,9 @@ function CardSetupForm({
           onChange={(event) => setConsent(event.target.checked)}
         />
         <span>
-          I authorize FloorPlanOnline to securely save this payment method and
-          charge the final confirmed project amount after scope approval. No
-          charge is made when this request is submitted.
+          I authorize FloorPlanOnline to securely save this {paymentMethod === "card" ? "card" : "bank account"} and
+          {paymentMethod === "card" ? " charge" : " debit"} the final confirmed project amount after scope approval.
+          {paymentMethod === "card" && " A 3% convenience fee will apply."} No charge is made when this request is submitted.
         </span>
       </label>
       {errorMessage && <p className="stripe-error">{errorMessage}</p>}
@@ -84,12 +89,14 @@ function CardSetupForm({
         className="primary-button"
         type="button"
         disabled={!stripe || !elements || !consent || submitting}
-        onClick={authorizeCard}
+        onClick={authorizePaymentMethod}
       >
-        {submitting ? "Verifying card…" : "Verify Card & Submit Request"}
+        {submitting
+          ? `Verifying ${paymentMethod === "card" ? "card" : "bank account"}…`
+          : `Verify ${paymentMethod === "card" ? "Card" : "Bank Account"} & Submit Request`}
       </button>
       <small className="stripe-security-note">
-        Card details are entered directly into Stripe and are not stored by
+        Payment details are entered directly into Stripe and are not stored by
         FloorPlanOnline.
       </small>
     </div>
@@ -121,6 +128,7 @@ export function StripeCardSetup(props: StripeCardSetupProps) {
         billingName={props.billingName}
         billingEmail={props.billingEmail}
         onComplete={props.onComplete}
+        paymentMethod={props.paymentMethod}
       />
     </Elements>
   );

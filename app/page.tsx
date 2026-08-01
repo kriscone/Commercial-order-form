@@ -15,7 +15,7 @@ import {
 } from "@/lib/pricing";
 
 type PackageId = "market" | "plan" | "build" | "custom";
-type PaymentMethod = "card" | "invoice";
+type PaymentMethod = "card" | "bank" | "invoice";
 type LandAreaUnit = "acres" | "square_feet";
 type TourOptionId =
   | "walkthrough"
@@ -288,7 +288,7 @@ function money(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -488,7 +488,19 @@ export default function Home() {
     pricingConfig.discountTiers,
     locationMultiplier,
   ]);
+  const cardConvenienceFee =
+    paymentMethod === "card"
+      ? Math.round(estimate.amount * 0.03 * 100) / 100
+      : 0;
+  const orderTotal = estimate.amount + cardConvenienceFee;
   const invoiceBillingProminent = estimate.amount > 2000;
+
+  function choosePaymentMethod(nextMethod: PaymentMethod) {
+    setPaymentMethod(nextMethod);
+    setStripeClientSecret("");
+    setStripePublishableKey("");
+    setStripeError("");
+  }
 
   function toggleCustom(id: string) {
     if (id === "photography" && selectedCustom.includes(id)) {
@@ -616,7 +628,8 @@ export default function Home() {
           landAreaAcres,
           zipCode,
           selection,
-          estimatedAmountCents: Math.round(estimate.amount * 100),
+          estimatedAmountCents: Math.round(orderTotal * 100),
+          paymentMethod,
         }),
       });
       const data = (await response.json()) as {
@@ -665,13 +678,15 @@ export default function Home() {
             We captured your {propertyType.toLowerCase()} project at{" "}
             {squareFeet.toLocaleString()} square feet. {paymentMethod === "card"
               ? "Your card was securely verified and saved with Stripe; no charge was made."
-              : "Your request for invoice payment was recorded."} A commercial
+              : paymentMethod === "bank"
+                ? "Your bank account was securely verified and saved with Stripe; no charge was made."
+                : "Your request for invoice payment was recorded."} A commercial
             project specialist will confirm access, deliverables and final
             pricing.
           </p>
           <div className="success-total">
-            <span>Current estimate</span>
-            <strong>{money(estimate.amount)}</strong>
+            <span>Current estimated total</span>
+            <strong>{money(orderTotal)}</strong>
           </div>
           <button
             className="primary-button"
@@ -1205,26 +1220,36 @@ export default function Home() {
                 <p className="kicker">Order summary & payment</p>
                 <h2>Confirm your service request</h2>
                 <p>
-                  Verify a card securely with Stripe or request invoice payment.
-                  No charge is made when this request is submitted.
+                  Securely verify a card or bank account with Stripe, or request
+                  invoice payment. Cards include a 3% convenience fee; bank
+                  accounts have no fee. No charge is made when submitted.
                 </p>
               </div>
             </div>
             {invoiceBillingProminent ? (
-              <div className="payment-toggle">
+              <div className="payment-toggle payment-toggle-three">
                 <button
                   type="button"
                   className={paymentMethod === "card" ? "selected" : ""}
-                  onClick={() => setPaymentMethod("card")}
+                  onClick={() => choosePaymentMethod("card")}
                   aria-pressed={paymentMethod === "card"}
                 >
                   <span>Credit card</span>
-                  <small>Verify and securely save—no charge today</small>
+                  <small>Securely save · 3% convenience fee</small>
+                </button>
+                <button
+                  type="button"
+                  className={paymentMethod === "bank" ? "selected" : ""}
+                  onClick={() => choosePaymentMethod("bank")}
+                  aria-pressed={paymentMethod === "bank"}
+                >
+                  <span>Bank account</span>
+                  <small>Secure ACH verification · no fee</small>
                 </button>
                 <button
                   type="button"
                   className={paymentMethod === "invoice" ? "selected" : ""}
-                  onClick={() => setPaymentMethod("invoice")}
+                  onClick={() => choosePaymentMethod("invoice")}
                   aria-pressed={paymentMethod === "invoice"}
                 >
                   <span>Request Invoice as Payment</span>
@@ -1233,19 +1258,31 @@ export default function Home() {
               </div>
             ) : (
               <div className="invoice-qualification">
-                <div
-                  className={`payment-primary-card ${
-                    paymentMethod === "card" ? "selected" : ""
-                  }`}
-                >
-                  <span>Credit card</span>
-                  <small>Verify and securely save—no charge today</small>
+                <div className="payment-toggle">
+                  <button
+                    type="button"
+                    className={paymentMethod === "card" ? "selected" : ""}
+                    onClick={() => choosePaymentMethod("card")}
+                    aria-pressed={paymentMethod === "card"}
+                  >
+                    <span>Credit card</span>
+                    <small>Securely save · 3% convenience fee</small>
+                  </button>
+                  <button
+                    type="button"
+                    className={paymentMethod === "bank" ? "selected" : ""}
+                    onClick={() => choosePaymentMethod("bank")}
+                    aria-pressed={paymentMethod === "bank"}
+                  >
+                    <span>Bank account</span>
+                    <small>Secure ACH verification · no fee</small>
+                  </button>
                 </div>
-                {paymentMethod === "card" ? (
+                {paymentMethod !== "invoice" ? (
                   <button
                     type="button"
                     className="invoice-qualification-link"
-                    onClick={() => setPaymentMethod("invoice")}
+                    onClick={() => choosePaymentMethod("invoice")}
                   >
                     Want to qualify for Invoice Billing?
                   </button>
@@ -1257,7 +1294,7 @@ export default function Home() {
                         We’ll review eligibility with your service request.
                       </small>
                     </div>
-                    <button type="button" onClick={() => setPaymentMethod("card")}>
+                    <button type="button" onClick={() => choosePaymentMethod("card")}>
                       Use credit card instead
                     </button>
                   </div>
@@ -1272,7 +1309,7 @@ export default function Home() {
                   name="billing-name"
                   placeholder="Full name"
                   value={billingName}
-                  disabled={paymentMethod === "card" && Boolean(stripeClientSecret)}
+                  disabled={paymentMethod !== "invoice" && Boolean(stripeClientSecret)}
                   onChange={(event) => setBillingName(event.target.value)}
                 />
               </label>
@@ -1284,7 +1321,7 @@ export default function Home() {
                   type="email"
                   placeholder="billing@company.com"
                   value={billingEmail}
-                  disabled={paymentMethod === "card" && Boolean(stripeClientSecret)}
+                  disabled={paymentMethod !== "invoice" && Boolean(stripeClientSecret)}
                   onChange={(event) => setBillingEmail(event.target.value)}
                 />
               </label>
@@ -1301,16 +1338,18 @@ export default function Home() {
                 </>
               )}
             </div>
-            {paymentMethod === "card" && (
+            {paymentMethod !== "invoice" && (
               <div className="stripe-authorization-section">
                 {!stripeClientSecret ? (
                   <>
                     <div className="stripe-explainer">
-                      <strong>Secure card verification</strong>
+                      <strong>
+                        Secure {paymentMethod === "card" ? "card" : "bank account"} verification
+                      </strong>
                       <p>
-                        Stripe will verify and save the card for the final
-                        confirmed project charge. This does not place a hold or
-                        charge the current estimate.
+                        Stripe will verify and save the {paymentMethod === "card" ? "card" : "bank account"} for the final
+                        confirmed project {paymentMethod === "card" ? "charge" : "ACH debit"}. This does not place a hold or
+                        charge the current estimate.{paymentMethod === "card" && " A 3% convenience fee will be added to the final card charge."}
                       </p>
                     </div>
                     {stripeError && <p className="stripe-error">{stripeError}</p>}
@@ -1321,8 +1360,8 @@ export default function Home() {
                       onClick={prepareCardAuthorization}
                     >
                       {stripePreparing
-                        ? "Opening secure card entry…"
-                        : "Continue to Secure Card Entry"}
+                        ? `Opening secure ${paymentMethod === "card" ? "card" : "bank account"} entry…`
+                        : `Continue to Secure ${paymentMethod === "card" ? "Card" : "Bank Account"} Entry`}
                     </button>
                   </>
                 ) : stripePublishableKey ? (
@@ -1331,11 +1370,12 @@ export default function Home() {
                     billingEmail={billingEmail}
                     clientSecret={stripeClientSecret}
                     onComplete={completeCardAuthorization}
+                    paymentMethod={paymentMethod}
                     publishableKey={stripePublishableKey}
                   />
                 ) : (
                   <p className="stripe-error">
-                    Secure card entry is temporarily unavailable. Please request
+                    Secure payment entry is temporarily unavailable. Please request
                     an invoice.
                   </p>
                 )}
@@ -1379,7 +1419,11 @@ export default function Home() {
           <div className="summary-metric">
             <span>Payment</span>
             <strong>
-              {paymentMethod === "card" ? "Credit card" : "Invoice requested"}
+              {paymentMethod === "card"
+                ? "Credit card · 3% fee"
+                : paymentMethod === "bank"
+                  ? "Bank account · no fee"
+                  : "Invoice requested"}
             </strong>
           </div>
           <div className="summary-metric">
@@ -1405,10 +1449,16 @@ export default function Home() {
               </p>
             )}
           </div>
+          {cardConvenienceFee > 0 && (
+            <div className="summary-line-item fee">
+              <span>Card convenience fee (3%)</span>
+              <strong>{money(cardConvenienceFee)}</strong>
+            </div>
+          )}
           <div className="summary-divider summary-total-divider" />
           <div className="summary-total">
-            <span>Current estimate</span>
-            <strong>{money(estimate.amount)}</strong>
+            <span>Current estimated total</span>
+            <strong>{money(orderTotal)}</strong>
           </div>
           {estimate.requiresReview && (
             <p className="review-flag">
@@ -1429,7 +1479,7 @@ export default function Home() {
             </button>
           ) : (
             <p className="summary-action-note">
-              Complete secure card verification to submit this request.
+              Complete secure payment verification to submit this request.
             </p>
           )}
           <p className="fine-print">
