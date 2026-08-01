@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fallbackPricingConfig, priceForItem } from "../lib/pricing.ts";
+import {
+  fallbackPricingConfig,
+  priceForItem,
+  pricingAreaForItem,
+} from "../lib/pricing.ts";
 
 const market = fallbackPricingConfig.items.find((item) => item.code === "market");
 const tiers = fallbackPricingConfig.discountTiers;
@@ -59,6 +63,15 @@ test("NYC multiplier still applies to site plans and aerial work", () => {
       `${code} should use NYC pricing`,
     );
   }
+});
+
+test("half-acre services use land area instead of building area", () => {
+  const sitePlan = fallbackPricingConfig.items.find(
+    (candidate) => candidate.code === "site_plan",
+  );
+  assert.equal(pricingAreaForItem(sitePlan, 100_000, 0.5), 21_780);
+  assert.equal(priceForItem(sitePlan, pricingAreaForItem(sitePlan, 100_000, 0.5), tiers), 300);
+  assert.equal(priceForItem(sitePlan, pricingAreaForItem(sitePlan, 2_000, 1.5), tiers), 500);
 });
 
 test("item tagging uses the $25 additional 1,000 sq ft rate", () => {

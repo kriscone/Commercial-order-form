@@ -5,6 +5,7 @@ import {
   fallbackPricingConfig,
   locationMultiplierForItem,
   normalizeZipCode,
+  pricingAreaForItem,
   priceForItem,
   type PricingConfig,
 } from "@/lib/pricing";
@@ -289,6 +290,7 @@ function money(value: number) {
 export default function Home() {
   const [propertyType, setPropertyType] = useState("Office");
   const [squareFeet, setSquareFeet] = useState(10000);
+  const [landAreaAcres, setLandAreaAcres] = useState(0.5);
   const [zipCode, setZipCode] = useState("");
   const [pricingConfig, setPricingConfig] = useState<PricingConfig>(
     fallbackPricingConfig,
@@ -299,7 +301,7 @@ export default function Home() {
   const [selectedCustom, setSelectedCustom] = useState<string[]>([]);
   const [additionalPhotoPacks, setAdditionalPhotoPacks] = useState(0);
   const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("invoice");
+    useState<PaymentMethod>("card");
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
@@ -351,9 +353,10 @@ export default function Home() {
   }, [has3DTourService]);
 
   function priceForCode(code: string) {
+    const pricingItem = pricingByCode.get(code);
     return priceForItem(
-      pricingByCode.get(code),
-      squareFeet,
+      pricingItem,
+      pricingAreaForItem(pricingItem, squareFeet, landAreaAcres),
       pricingConfig.discountTiers,
       locationMultiplier,
     );
@@ -375,9 +378,10 @@ export default function Home() {
         (option) => option.id === customTour,
       );
       if (selectedTour) {
+        const pricingItem = pricingByCode.get(selectedTour.pricingCode);
         const tourPrice = priceForItem(
-          pricingByCode.get(selectedTour.pricingCode),
-          sqft,
+          pricingItem,
+          pricingAreaForItem(pricingItem, sqft, landAreaAcres),
           pricingConfig.discountTiers,
           locationMultiplier,
         );
@@ -409,9 +413,10 @@ export default function Home() {
       selectedCustom.forEach((id) => {
         const item = customDeliverables.find((entry) => entry.id === id);
         if (!item) return;
+        const pricingItem = pricingByCode.get(item.pricingCode);
         const itemPrice = priceForItem(
-          pricingByCode.get(item.pricingCode),
-          sqft,
+          pricingItem,
+          pricingAreaForItem(pricingItem, sqft, landAreaAcres),
           pricingConfig.discountTiers,
           locationMultiplier,
         );
@@ -425,9 +430,10 @@ export default function Home() {
     } else {
       const selectedPackage = packages.find((pkg) => pkg.id === packageId);
       if (selectedPackage) {
+        const pricingItem = pricingByCode.get(selectedPackage.pricingCode);
         const packagePrice = priceForItem(
-          pricingByCode.get(selectedPackage.pricingCode),
-          sqft,
+          pricingItem,
+          pricingAreaForItem(pricingItem, sqft, landAreaAcres),
           pricingConfig.discountTiers,
           locationMultiplier,
         );
@@ -450,6 +456,7 @@ export default function Home() {
     additionalPhotoPacks,
     customTour,
     canAddPhotoPacks,
+    landAreaAcres,
     packageId,
     selectedCustom,
     squareFeet,
@@ -693,6 +700,23 @@ export default function Home() {
                   />
                   <span>sq ft</span>
                 </div>
+              </label>
+              <label>
+                Land Area in Scope
+                <div className="input-suffix">
+                  <input
+                    required
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={landAreaAcres}
+                    onChange={(event) =>
+                      setLandAreaAcres(Number(event.target.value))
+                    }
+                  />
+                  <span>acres</span>
+                </div>
+                <small>Used for site plans and acreage-based aerial work.</small>
               </label>
               <label>
                 Occupancy
@@ -1085,6 +1109,10 @@ export default function Home() {
             <strong>{squareFeet.toLocaleString()} sq ft</strong>
           </div>
           <div className="summary-metric">
+            <span>Land area in scope</span>
+            <strong>{landAreaAcres.toLocaleString()} acres</strong>
+          </div>
+          <div className="summary-metric">
             <span>Selection</span>
             <strong>
               {packageId === "custom"
@@ -1140,7 +1168,7 @@ export default function Home() {
             No charge is made when you submit. We will confirm the time and
             other additional charges, if any, for travel, access complexity and
             scope-based item tagging. Final pricing is based on total measured
-            area.
+            building and land area, as applicable.
           </p>
         </aside>
       </form>

@@ -124,6 +124,17 @@ export function locationMultiplierForItem(
     : locationMultiplier;
 }
 
+export function pricingAreaForItem(
+  pricingItem: PricingItem | undefined,
+  buildingSquareFeet: number,
+  landAreaAcres: number,
+) {
+  if (pricingItem?.pricingType === "per_half_acre") {
+    return Math.max(0, landAreaAcres || 0) * 43_560;
+  }
+  return buildingSquareFeet;
+}
+
 export function priceForItem(
   pricingItem: PricingItem | undefined,
   squareFeet: number,
