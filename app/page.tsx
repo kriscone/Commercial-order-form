@@ -472,6 +472,7 @@ export default function Home() {
     pricingConfig.discountTiers,
     locationMultiplier,
   ]);
+  const invoiceBillingProminent = estimate.amount > 2000;
 
   function toggleCustom(id: string) {
     if (id === "photography" && selectedCustom.includes(id)) {
@@ -1167,26 +1168,60 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <div className="payment-toggle">
-              <button
-                type="button"
-                className={paymentMethod === "card" ? "selected" : ""}
-                onClick={() => setPaymentMethod("card")}
-                aria-pressed={paymentMethod === "card"}
-              >
-                <span>Credit card</span>
-                <small>Verify and securely save—no charge today</small>
-              </button>
-              <button
-                type="button"
-                className={paymentMethod === "invoice" ? "selected" : ""}
-                onClick={() => setPaymentMethod("invoice")}
-                aria-pressed={paymentMethod === "invoice"}
-              >
-                <span>Request Invoice as Payment</span>
-                <small>Send to your billing contact or AP team</small>
-              </button>
-            </div>
+            {invoiceBillingProminent ? (
+              <div className="payment-toggle">
+                <button
+                  type="button"
+                  className={paymentMethod === "card" ? "selected" : ""}
+                  onClick={() => setPaymentMethod("card")}
+                  aria-pressed={paymentMethod === "card"}
+                >
+                  <span>Credit card</span>
+                  <small>Verify and securely save—no charge today</small>
+                </button>
+                <button
+                  type="button"
+                  className={paymentMethod === "invoice" ? "selected" : ""}
+                  onClick={() => setPaymentMethod("invoice")}
+                  aria-pressed={paymentMethod === "invoice"}
+                >
+                  <span>Request Invoice as Payment</span>
+                  <small>Available for larger commercial orders</small>
+                </button>
+              </div>
+            ) : (
+              <div className="invoice-qualification">
+                <div
+                  className={`payment-primary-card ${
+                    paymentMethod === "card" ? "selected" : ""
+                  }`}
+                >
+                  <span>Credit card</span>
+                  <small>Verify and securely save—no charge today</small>
+                </div>
+                {paymentMethod === "card" ? (
+                  <button
+                    type="button"
+                    className="invoice-qualification-link"
+                    onClick={() => setPaymentMethod("invoice")}
+                  >
+                    Want to qualify for Invoice Billing?
+                  </button>
+                ) : (
+                  <div className="invoice-request-choice">
+                    <div>
+                      <strong>Invoice billing requested</strong>
+                      <small>
+                        We’ll review eligibility with your service request.
+                      </small>
+                    </div>
+                    <button type="button" onClick={() => setPaymentMethod("card")}>
+                      Use credit card instead
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="field-grid">
               <label>
                 Billing contact
