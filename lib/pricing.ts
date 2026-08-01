@@ -143,6 +143,21 @@ export function landAreaToAcres(
   return unit === "square_feet" ? safeValue / 43_560 : safeValue;
 }
 
+export function normalizeAcreShorthand(value: number) {
+  return Number.isInteger(value) && value >= 10 && value <= 100
+    ? value / 100
+    : value;
+}
+
+export function inferLandAreaUnit(
+  value: number,
+  currentUnit: "acres" | "square_feet",
+) {
+  return currentUnit === "acres" && value > 100
+    ? "square_feet"
+    : currentUnit;
+}
+
 export function priceForItem(
   pricingItem: PricingItem | undefined,
   squareFeet: number,

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   fallbackPricingConfig,
+  inferLandAreaUnit,
   landAreaToAcres,
+  normalizeAcreShorthand,
   priceForItem,
   pricingAreaForItem,
 } from "../lib/pricing.ts";
@@ -79,6 +81,15 @@ test("land area accepts acres or square feet", () => {
   assert.equal(landAreaToAcres(1.5, "acres"), 1.5);
   assert.equal(landAreaToAcres(21_780, "square_feet"), 0.5);
   assert.equal(landAreaToAcres(43_560, "square_feet"), 1);
+});
+
+test("land area entry supports acre shorthand and automatic square feet", () => {
+  assert.equal(normalizeAcreShorthand(50), 0.5);
+  assert.equal(normalizeAcreShorthand(75), 0.75);
+  assert.equal(normalizeAcreShorthand(100), 1);
+  assert.equal(normalizeAcreShorthand(2), 2);
+  assert.equal(inferLandAreaUnit(100, "acres"), "acres");
+  assert.equal(inferLandAreaUnit(101, "acres"), "square_feet");
 });
 
 test("item tagging uses the $25 additional 1,000 sq ft rate", () => {

@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { StripeCardSetup } from "@/app/components/stripe-card-setup";
 import {
   fallbackPricingConfig,
+  inferLandAreaUnit,
   landAreaToAcres,
   locationMultiplierForItem,
   normalizeZipCode,
+  normalizeAcreShorthand,
   pricingAreaForItem,
   priceForItem,
   type PricingConfig,
@@ -822,38 +824,47 @@ export default function Home() {
               </label>
               <label>
                 Land Area in Scope
-                <div className="land-unit-toggle" role="group" aria-label="Land area unit">
-                  <button
-                    type="button"
-                    className={landAreaUnit === "acres" ? "selected" : ""}
-                    onClick={() => changeLandAreaUnit("acres")}
-                    aria-pressed={landAreaUnit === "acres"}
-                  >
-                    Acres
-                  </button>
-                  <button
-                    type="button"
-                    className={landAreaUnit === "square_feet" ? "selected" : ""}
-                    onClick={() => changeLandAreaUnit("square_feet")}
-                    aria-pressed={landAreaUnit === "square_feet"}
-                  >
-                    Square feet
-                  </button>
-                </div>
+                <select
+                  className="land-unit-select"
+                  name="land-area-unit"
+                  aria-label="Land area unit"
+                  value={landAreaUnit}
+                  onChange={(event) =>
+                    changeLandAreaUnit(event.target.value as LandAreaUnit)
+                  }
+                >
+                  <option value="acres">Acres</option>
+                  <option value="square_feet">Square feet</option>
+                </select>
                 <div className="input-suffix">
                   <input
                     required
+                    name="land-area"
                     type="number"
                     min={landAreaUnit === "acres" ? "0.1" : "1"}
-                    step={landAreaUnit === "acres" ? "0.1" : "100"}
+                    step={landAreaUnit === "acres" ? "0.01" : "100"}
                     value={landAreaValue}
-                    onChange={(event) =>
-                      setLandAreaValue(Number(event.target.value))
-                    }
+                    onChange={(event) => {
+                      const nextValue = Number(event.target.value);
+                      setLandAreaValue(nextValue);
+                      setLandAreaUnit((currentUnit) =>
+                        inferLandAreaUnit(nextValue, currentUnit),
+                      );
+                    }}
+                    onBlur={() => {
+                      if (landAreaUnit === "acres") {
+                        setLandAreaValue((currentValue) =>
+                          normalizeAcreShorthand(currentValue),
+                        );
+                      }
+                    }}
                   />
                   <span>{landAreaUnit === "acres" ? "acres" : "sq ft"}</span>
                 </div>
-                <small>Used for site plans and acreage-based aerial work.</small>
+                <small>
+                  Used for site plans and acreage-based aerial work. Enter 50
+                  for 0.50 acres; values over 100 switch to square feet.
+                </small>
               </label>
               <label>
                 Occupancy
