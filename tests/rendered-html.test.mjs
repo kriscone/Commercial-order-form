@@ -26,6 +26,7 @@ test("server-renders the commercial order form", async () => {
   assert.match(html, /Review Order/i);
   assert.match(html, /Review &amp; payment/i);
   assert.match(html, /Land Area in Scope/i);
+  assert.match(html, /Square feet/i);
   assert.match(html, /Continue to Secure Card Entry/i);
   assert.match(html, /Request Invoice as Payment/i);
   assert.match(html, /Email for main on-site contact/i);

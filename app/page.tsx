@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StripeCardSetup } from "@/app/components/stripe-card-setup";
 import {
   fallbackPricingConfig,
+  landAreaToAcres,
   locationMultiplierForItem,
   normalizeZipCode,
   pricingAreaForItem,
@@ -13,6 +14,7 @@ import {
 
 type PackageId = "market" | "plan" | "build" | "custom";
 type PaymentMethod = "card" | "invoice";
+type LandAreaUnit = "acres" | "square_feet";
 type TourOptionId =
   | "walkthrough"
   | "photo-tour"
@@ -291,7 +293,8 @@ function money(value: number) {
 export default function Home() {
   const [propertyType, setPropertyType] = useState("Office");
   const [squareFeet, setSquareFeet] = useState(10000);
-  const [landAreaAcres, setLandAreaAcres] = useState(0.5);
+  const [landAreaValue, setLandAreaValue] = useState(0.5);
+  const [landAreaUnit, setLandAreaUnit] = useState<LandAreaUnit>("acres");
   const [zipCode, setZipCode] = useState("");
   const [pricingConfig, setPricingConfig] = useState<PricingConfig>(
     fallbackPricingConfig,
@@ -311,6 +314,17 @@ export default function Home() {
   const [stripePreparing, setStripePreparing] = useState(false);
   const [stripeError, setStripeError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const landAreaAcres = landAreaToAcres(landAreaValue, landAreaUnit);
+
+  function changeLandAreaUnit(nextUnit: LandAreaUnit) {
+    if (nextUnit === landAreaUnit) return;
+    setLandAreaValue((currentValue) =>
+      nextUnit === "square_feet"
+        ? Math.round(currentValue * 43_560)
+        : Number((currentValue / 43_560).toFixed(3)),
+    );
+    setLandAreaUnit(nextUnit);
+  }
 
   useEffect(() => {
     let active = true;
@@ -808,18 +822,36 @@ export default function Home() {
               </label>
               <label>
                 Land Area in Scope
+                <div className="land-unit-toggle" role="group" aria-label="Land area unit">
+                  <button
+                    type="button"
+                    className={landAreaUnit === "acres" ? "selected" : ""}
+                    onClick={() => changeLandAreaUnit("acres")}
+                    aria-pressed={landAreaUnit === "acres"}
+                  >
+                    Acres
+                  </button>
+                  <button
+                    type="button"
+                    className={landAreaUnit === "square_feet" ? "selected" : ""}
+                    onClick={() => changeLandAreaUnit("square_feet")}
+                    aria-pressed={landAreaUnit === "square_feet"}
+                  >
+                    Square feet
+                  </button>
+                </div>
                 <div className="input-suffix">
                   <input
                     required
                     type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={landAreaAcres}
+                    min={landAreaUnit === "acres" ? "0.1" : "1"}
+                    step={landAreaUnit === "acres" ? "0.1" : "100"}
+                    value={landAreaValue}
                     onChange={(event) =>
-                      setLandAreaAcres(Number(event.target.value))
+                      setLandAreaValue(Number(event.target.value))
                     }
                   />
-                  <span>acres</span>
+                  <span>{landAreaUnit === "acres" ? "acres" : "sq ft"}</span>
                 </div>
                 <small>Used for site plans and acreage-based aerial work.</small>
               </label>
@@ -1318,7 +1350,9 @@ export default function Home() {
           </div>
           <div className="summary-metric">
             <span>Land area in scope</span>
-            <strong>{landAreaAcres.toLocaleString()} acres</strong>
+            <strong>
+              {landAreaValue.toLocaleString()} {landAreaUnit === "acres" ? "acres" : "sq ft"}
+            </strong>
           </div>
           <div className="summary-metric">
             <span>Selection</span>

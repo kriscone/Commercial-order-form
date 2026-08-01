@@ -515,6 +515,29 @@ legend {
   color: white;
 }
 
+.land-unit-toggle {
+  display: inline-flex;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.land-unit-toggle button {
+  background: #eef3f1;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.land-unit-toggle button.selected {
+  background: var(--night);
+  border-color: var(--night);
+  color: white;
+}
+
 .input-suffix {
   position: relative;
 }

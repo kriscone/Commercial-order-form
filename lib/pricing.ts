@@ -135,6 +135,14 @@ export function pricingAreaForItem(
   return buildingSquareFeet;
 }
 
+export function landAreaToAcres(
+  value: number,
+  unit: "acres" | "square_feet",
+) {
+  const safeValue = Math.max(0, value || 0);
+  return unit === "square_feet" ? safeValue / 43_560 : safeValue;
+}
+
 export function priceForItem(
   pricingItem: PricingItem | undefined,
   squareFeet: number,
