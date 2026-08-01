@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { StripeCardSetup } from "@/app/components/stripe-card-setup";
 import {
   fallbackPricingConfig,
   locationMultiplierForItem,
@@ -302,6 +303,13 @@ export default function Home() {
   const [additionalPhotoPacks, setAdditionalPhotoPacks] = useState(0);
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("card");
+  const [checkoutStep, setCheckoutStep] = useState<1 | 2>(1);
+  const [billingName, setBillingName] = useState("");
+  const [billingEmail, setBillingEmail] = useState("");
+  const [stripeClientSecret, setStripeClientSecret] = useState("");
+  const [stripePublishableKey, setStripePublishableKey] = useState("");
+  const [stripePreparing, setStripePreparing] = useState(false);
+  const [stripeError, setStripeError] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
@@ -546,8 +554,83 @@ export default function Home() {
     );
   }
 
+  function reviewOrder(event: React.MouseEvent<HTMLButtonElement>) {
+    const form = event.currentTarget.form;
+    if (!form?.reportValidity()) return;
+    setCheckoutStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function returnToOrder() {
+    setCheckoutStep(1);
+    setStripeClientSecret("");
+    setStripePublishableKey("");
+    setStripeError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function prepareCardAuthorization(
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) {
+    const form = event.currentTarget.form;
+    if (!form?.reportValidity()) return;
+
+    const formData = new FormData(form);
+    const selection =
+      packageId === "custom"
+        ? `Build your own - ${
+            customTourOptions.find((option) => option.id === customTour)?.name
+          }`
+        : `${packages.find((pkg) => pkg.id === packageId)?.name} package`;
+
+    setStripePreparing(true);
+    setStripeError("");
+    try {
+      const response = await fetch("/api/stripe/setup-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billingName,
+          billingEmail,
+          company: formData.get("company"),
+          project: formData.get("project"),
+          propertyType,
+          squareFeet,
+          landAreaAcres,
+          zipCode,
+          selection,
+          estimatedAmountCents: Math.round(estimate.amount * 100),
+        }),
+      });
+      const data = (await response.json()) as {
+        clientSecret?: string;
+        error?: string;
+        publishableKey?: string;
+      };
+      if (!response.ok || !data.clientSecret || !data.publishableKey) {
+        throw new Error(data.error ?? "Secure card entry could not be started.");
+      }
+      setStripeClientSecret(data.clientSecret);
+      setStripePublishableKey(data.publishableKey);
+    } catch (error) {
+      setStripeError(
+        error instanceof Error
+          ? error.message
+          : "Secure card entry could not be started.",
+      );
+    } finally {
+      setStripePreparing(false);
+    }
+  }
+
+  function completeCardAuthorization() {
+    setSubmitted(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (checkoutStep !== 2 || paymentMethod !== "invoice") return;
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -563,15 +646,23 @@ export default function Home() {
           <h1>Your property is ready for scope review.</h1>
           <p>
             We captured your {propertyType.toLowerCase()} project at{" "}
-            {squareFeet.toLocaleString()} square feet. A commercial project
-            specialist will confirm access, deliverables and final pricing
-            before payment or invoicing.
+            {squareFeet.toLocaleString()} square feet. {paymentMethod === "card"
+              ? "Your card was securely verified and saved with Stripe; no charge was made."
+              : "Your request for invoice payment was recorded."} A commercial
+            project specialist will confirm access, deliverables and final
+            pricing.
           </p>
           <div className="success-total">
             <span>Current estimate</span>
             <strong>{money(estimate.amount)}</strong>
           </div>
-          <button className="primary-button" onClick={() => setSubmitted(false)}>
+          <button
+            className="primary-button"
+            onClick={() => {
+              setSubmitted(false);
+              returnToOrder();
+            }}
+          >
             Edit request
           </button>
         </section>
@@ -605,9 +696,22 @@ export default function Home() {
         </div>
       </section>
 
+      <div className="checkout-progress" aria-label="Order progress">
+        <span className={checkoutStep === 1 ? "active" : "complete"}>
+          1 · Build request
+        </span>
+        <span className={checkoutStep === 2 ? "active" : ""}>
+          2 · Review & payment
+        </span>
+      </div>
+
       <form className="order-layout" onSubmit={submitOrder}>
         <div className="form-column">
-          <section className="form-section">
+          <section
+            className={`form-section ${
+              checkoutStep === 1 ? "" : "checkout-step-hidden"
+            }`}
+          >
             <div className="section-heading">
               <span>01</span>
               <div>
@@ -738,7 +842,11 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="form-section">
+          <section
+            className={`form-section ${
+              checkoutStep === 1 ? "" : "checkout-step-hidden"
+            }`}
+          >
             <div className="section-heading">
               <span>02</span>
               <div>
@@ -983,7 +1091,11 @@ export default function Home() {
             )}
           </section>
 
-          <section className="form-section">
+          <section
+            className={`form-section ${
+              checkoutStep === 1 ? "" : "checkout-step-hidden"
+            }`}
+          >
             <div className="section-heading">
               <span>03</span>
               <div>
@@ -1039,15 +1151,19 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="form-section">
+          <section
+            className={`form-section ${
+              checkoutStep === 2 ? "" : "checkout-step-hidden"
+            }`}
+          >
             <div className="section-heading">
               <span>04</span>
               <div>
-                <p className="kicker">Billing</p>
-                <h2>Choose card or invoice</h2>
+                <p className="kicker">Order summary & payment</p>
+                <h2>Confirm your service request</h2>
                 <p>
-                  Complex scopes are confirmed before a charge is processed or
-                  an invoice is issued.
+                  Verify a card securely with Stripe or request invoice payment.
+                  No charge is made when this request is submitted.
                 </p>
               </div>
             </div>
@@ -1058,8 +1174,8 @@ export default function Home() {
                 onClick={() => setPaymentMethod("card")}
                 aria-pressed={paymentMethod === "card"}
               >
-                <span>Card</span>
-                <small>Secure payment after scope confirmation</small>
+                <span>Credit card</span>
+                <small>Verify and securely save—no charge today</small>
               </button>
               <button
                 type="button"
@@ -1067,22 +1183,32 @@ export default function Home() {
                 onClick={() => setPaymentMethod("invoice")}
                 aria-pressed={paymentMethod === "invoice"}
               >
-                <span>Invoice</span>
+                <span>Request Invoice as Payment</span>
                 <small>Send to your billing contact or AP team</small>
               </button>
             </div>
             <div className="field-grid">
               <label>
                 Billing contact
-                <input required name="billing-name" placeholder="Full name" />
+                <input
+                  required={checkoutStep === 2}
+                  name="billing-name"
+                  placeholder="Full name"
+                  value={billingName}
+                  disabled={paymentMethod === "card" && Boolean(stripeClientSecret)}
+                  onChange={(event) => setBillingName(event.target.value)}
+                />
               </label>
               <label>
                 Billing email
                 <input
-                  required
+                  required={checkoutStep === 2}
                   name="billing-email"
                   type="email"
                   placeholder="billing@company.com"
+                  value={billingEmail}
+                  disabled={paymentMethod === "card" && Boolean(stripeClientSecret)}
+                  onChange={(event) => setBillingEmail(event.target.value)}
                 />
               </label>
               {paymentMethod === "invoice" && (
@@ -1098,6 +1224,53 @@ export default function Home() {
                 </>
               )}
             </div>
+            {paymentMethod === "card" && (
+              <div className="stripe-authorization-section">
+                {!stripeClientSecret ? (
+                  <>
+                    <div className="stripe-explainer">
+                      <strong>Secure card verification</strong>
+                      <p>
+                        Stripe will verify and save the card for the final
+                        confirmed project charge. This does not place a hold or
+                        charge the current estimate.
+                      </p>
+                    </div>
+                    {stripeError && <p className="stripe-error">{stripeError}</p>}
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={stripePreparing}
+                      onClick={prepareCardAuthorization}
+                    >
+                      {stripePreparing
+                        ? "Opening secure card entry…"
+                        : "Continue to Secure Card Entry"}
+                    </button>
+                  </>
+                ) : stripePublishableKey ? (
+                  <StripeCardSetup
+                    billingName={billingName}
+                    billingEmail={billingEmail}
+                    clientSecret={stripeClientSecret}
+                    onComplete={completeCardAuthorization}
+                    publishableKey={stripePublishableKey}
+                  />
+                ) : (
+                  <p className="stripe-error">
+                    Secure card entry is temporarily unavailable. Please request
+                    an invoice.
+                  </p>
+                )}
+              </div>
+            )}
+            <button
+              className="text-button checkout-back-button"
+              type="button"
+              onClick={returnToOrder}
+            >
+              ← Back to edit services
+            </button>
           </section>
         </div>
 
@@ -1126,7 +1299,9 @@ export default function Home() {
           </div>
           <div className="summary-metric">
             <span>Payment</span>
-            <strong>{paymentMethod === "card" ? "Card" : "Invoice"}</strong>
+            <strong>
+              {paymentMethod === "card" ? "Credit card" : "Invoice requested"}
+            </strong>
           </div>
           <div className="summary-metric">
             <span>Location pricing</span>
@@ -1161,9 +1336,23 @@ export default function Home() {
               Final total requires scope confirmation.
             </p>
           )}
-          <button className="primary-button" type="submit">
-            Submit Service Request
-          </button>
+          {checkoutStep === 1 ? (
+            <button
+              className="primary-button"
+              type="button"
+              onClick={reviewOrder}
+            >
+              Review Order
+            </button>
+          ) : paymentMethod === "invoice" ? (
+            <button className="primary-button" type="submit">
+              Submit Service Request
+            </button>
+          ) : (
+            <p className="summary-action-note">
+              Complete secure card verification to submit this request.
+            </p>
+          )}
           <p className="fine-print">
             No charge is made when you submit. We will confirm the time and
             other additional charges, if any, for travel, access complexity and

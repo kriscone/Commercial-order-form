@@ -326,6 +326,38 @@ button {
   width: 17px;
 }
 
+.checkout-progress {
+  display: flex;
+  gap: 10px;
+  margin: 0 auto 18px;
+  max-width: 1360px;
+}
+
+.checkout-progress span {
+  background: #e7eeeb;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 9px 14px;
+  text-transform: uppercase;
+}
+
+.checkout-progress span.active {
+  background: var(--night);
+  color: white;
+}
+
+.checkout-progress span.complete {
+  background: #e7f5df;
+  color: #326c17;
+}
+
+.checkout-step-hidden {
+  display: none;
+}
+
 .order-layout {
   align-items: start;
   display: grid;
@@ -1009,6 +1041,109 @@ legend {
   margin-top: 5px;
 }
 
+.stripe-authorization-section {
+  border-top: 1px solid var(--line);
+  margin-top: 26px;
+  padding-top: 26px;
+}
+
+.stripe-explainer {
+  background: #eef7fb;
+  border: 1px solid #cfe4ef;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.stripe-explainer strong {
+  color: var(--night);
+  display: block;
+  font-size: 15px;
+}
+
+.stripe-explainer p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 7px 0 0;
+}
+
+.stripe-card-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.stripe-element-shell {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.stripe-consent {
+  align-items: flex-start;
+  background: #f5f8f7;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  gap: 11px;
+  line-height: 1.5;
+  padding: 14px;
+}
+
+.stripe-consent input {
+  flex: 0 0 auto;
+  min-height: auto;
+  margin: 3px 0 0;
+  width: 17px;
+}
+
+.stripe-consent span {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.stripe-error {
+  background: #fff1f1;
+  border: 1px solid #e9bcbc;
+  border-radius: 10px;
+  color: #9d2525;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 12px 0 0;
+  padding: 11px 13px;
+}
+
+.stripe-security-note {
+  color: var(--ink-soft);
+  display: block;
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.checkout-back-button {
+  background: transparent;
+  border: 0;
+  color: var(--accent-dark);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 22px;
+  padding: 8px 0;
+}
+
+.summary-action-note {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: #dce9e3;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 20px 0 0;
+  padding: 12px;
+  text-align: center;
+}
+
 .summary-card {
   background: var(--night);
   border-radius: 22px;
@@ -1138,6 +1273,11 @@ legend {
 
 .primary-button:hover {
   background: var(--accent-dark);
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .fine-print {

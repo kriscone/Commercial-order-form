@@ -23,7 +23,10 @@ test("server-renders the commercial order form", async () => {
   const html = await response.text();
   assert.match(html, /Build your commercial property order/i);
   assert.match(html, /ZIP code/i);
-  assert.match(html, /Submit Service Request/i);
+  assert.match(html, /Review Order/i);
+  assert.match(html, /Review &amp; payment/i);
+  assert.match(html, /Land Area in Scope/i);
+  assert.match(html, /Continue to Secure Card Entry/i);
   assert.match(html, /Email for main on-site contact/i);
   assert.match(html, /multiple emails, separated by a comma/i);
   assert.match(html, /Order details/i);
