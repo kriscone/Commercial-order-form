@@ -515,9 +515,20 @@ legend {
   color: white;
 }
 
+.land-area-control {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  margin-top: 9px;
+}
+
+.land-area-control input,
+.land-area-control select {
+  margin-top: 0;
+}
+
 .land-unit-select {
-  max-width: 180px;
-  width: 100%;
+  width: 130px;
 }
 
 .input-suffix {
@@ -1518,6 +1529,14 @@ legend {
 
   .package-card {
     min-height: 0;
+  }
+
+  .land-area-control {
+    grid-template-columns: minmax(0, 1fr) 112px;
+  }
+
+  .land-unit-select {
+    width: 112px;
   }
 }
 

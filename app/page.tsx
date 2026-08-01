@@ -824,19 +824,7 @@ export default function Home() {
               </label>
               <label>
                 Land Area in Scope
-                <select
-                  className="land-unit-select"
-                  name="land-area-unit"
-                  aria-label="Land area unit"
-                  value={landAreaUnit}
-                  onChange={(event) =>
-                    changeLandAreaUnit(event.target.value as LandAreaUnit)
-                  }
-                >
-                  <option value="acres">Acres</option>
-                  <option value="square_feet">Square feet</option>
-                </select>
-                <div className="input-suffix">
+                <div className="land-area-control">
                   <input
                     required
                     name="land-area"
@@ -859,7 +847,18 @@ export default function Home() {
                       }
                     }}
                   />
-                  <span>{landAreaUnit === "acres" ? "acres" : "sq ft"}</span>
+                  <select
+                    className="land-unit-select"
+                    name="land-area-unit"
+                    aria-label="Land area unit"
+                    value={landAreaUnit}
+                    onChange={(event) =>
+                      changeLandAreaUnit(event.target.value as LandAreaUnit)
+                    }
+                  >
+                    <option value="acres">Acres</option>
+                    <option value="square_feet">Square feet</option>
+                  </select>
                 </div>
                 <small>
                   Used for site plans and acreage-based aerial work. Enter 50
