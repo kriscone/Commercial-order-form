@@ -3,6 +3,9 @@ import Stripe from "stripe";
 
 type TaxCalculationRequest = {
   amountCents?: number;
+  line1?: string;
+  city?: string;
+  state?: string;
   postalCode?: string;
 };
 
@@ -10,6 +13,9 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TaxCalculationRequest;
     const amountCents = Math.round(Number(body.amountCents));
+    const line1 = String(body.line1 ?? "").trim();
+    const city = String(body.city ?? "").trim();
+    const state = String(body.state ?? "").trim().toUpperCase();
     const postalCode = String(body.postalCode ?? "").trim();
 
     if (!Number.isFinite(amountCents) || amountCents < 1) {
@@ -21,6 +27,12 @@ export async function POST(request: Request) {
     if (!/^\d{5}$/.test(postalCode)) {
       return NextResponse.json(
         { error: "A valid five-digit property ZIP code is required." },
+        { status: 400 },
+      );
+    }
+    if (!line1 || !city || !/^[A-Z]{2}$/.test(state)) {
+      return NextResponse.json(
+        { error: "A complete property address is required." },
         { status: 400 },
       );
     }
@@ -39,6 +51,9 @@ export async function POST(request: Request) {
       customer_details: {
         address: {
           country: "US",
+          line1,
+          city,
+          state,
           postal_code: postalCode,
         },
         address_source: "shipping",

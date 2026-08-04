@@ -297,6 +297,9 @@ export default function Home() {
   const [squareFeet, setSquareFeet] = useState(10000);
   const [landAreaValue, setLandAreaValue] = useState(0.5);
   const [landAreaUnit, setLandAreaUnit] = useState<LandAreaUnit>("acres");
+  const [propertyAddress, setPropertyAddress] = useState("");
+  const [propertyCity, setPropertyCity] = useState("");
+  const [propertyState, setPropertyState] = useState("");
   const [zipCode, setZipCode] = useState("");
   const [pricingConfig, setPricingConfig] = useState<PricingConfig>(
     fallbackPricingConfig,
@@ -497,7 +500,14 @@ export default function Home() {
   const orderTotal = taxableSubtotal + salesTax;
 
   useEffect(() => {
-    if (checkoutStep !== 2 || zipCode.length !== 5 || taxableSubtotal <= 0) {
+    if (
+      checkoutStep !== 2 ||
+      !propertyAddress.trim() ||
+      !propertyCity.trim() ||
+      !/^[A-Za-z]{2}$/.test(propertyState) ||
+      zipCode.length !== 5 ||
+      taxableSubtotal <= 0
+    ) {
       setSalesTax(0);
       setTaxCalculationId("");
       setTaxStatus("idle");
@@ -512,6 +522,9 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amountCents: Math.round(taxableSubtotal * 100),
+          line1: propertyAddress.trim(),
+          city: propertyCity.trim(),
+          state: propertyState.toUpperCase(),
           postalCode: zipCode,
         }),
       })
@@ -541,7 +554,14 @@ export default function Home() {
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [checkoutStep, taxableSubtotal, zipCode]);
+  }, [
+    checkoutStep,
+    propertyAddress,
+    propertyCity,
+    propertyState,
+    taxableSubtotal,
+    zipCode,
+  ]);
 
   function choosePaymentMethod(nextMethod: PaymentMethod) {
     setPaymentMethod(nextMethod);
@@ -817,11 +837,43 @@ export default function Home() {
                 />
               </label>
               <label className="field-full">
-                Property address
+                Property street address
                 <input
                   required
                   name="address"
-                  placeholder="Street, city and state"
+                  autoComplete="street-address"
+                  value={propertyAddress}
+                  onChange={(event) => setPropertyAddress(event.target.value)}
+                  placeholder="123 Main Street"
+                />
+              </label>
+              <label>
+                City
+                <input
+                  required
+                  name="city"
+                  autoComplete="address-level2"
+                  value={propertyCity}
+                  onChange={(event) => setPropertyCity(event.target.value)}
+                  placeholder="City"
+                />
+              </label>
+              <label>
+                State
+                <input
+                  required
+                  name="state"
+                  autoComplete="address-level1"
+                  maxLength={2}
+                  pattern="[A-Za-z]{2}"
+                  title="Enter the two-letter state abbreviation"
+                  value={propertyState}
+                  onChange={(event) =>
+                    setPropertyState(
+                      event.target.value.replace(/[^A-Za-z]/g, "").toUpperCase(),
+                    )
+                  }
+                  placeholder="TX"
                 />
               </label>
               <label>
@@ -829,6 +881,7 @@ export default function Home() {
                 <input
                   required
                   name="zip"
+                  autoComplete="postal-code"
                   inputMode="numeric"
                   pattern="[0-9]{5}"
                   maxLength={5}
