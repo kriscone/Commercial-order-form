@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { StripeCardSetup } from "@/app/components/stripe-card-setup";
+import { StripePaymentSetup } from "@/app/components/stripe-card-setup";
 import {
   fallbackPricingConfig,
   inferLandAreaUnit,
@@ -15,7 +15,7 @@ import {
 } from "@/lib/pricing";
 
 type PackageId = "market" | "plan" | "build" | "custom";
-type PaymentMethod = "card" | "bank" | "invoice";
+type PaymentMethod = "stripe" | "invoice";
 type LandAreaUnit = "acres" | "square_feet";
 type TourOptionId =
   | "walkthrough"
@@ -307,7 +307,7 @@ export default function Home() {
   const [selectedCustom, setSelectedCustom] = useState<string[]>([]);
   const [additionalPhotoPacks, setAdditionalPhotoPacks] = useState(0);
   const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("card");
+    useState<PaymentMethod>("stripe");
   const [checkoutStep, setCheckoutStep] = useState<1 | 2>(1);
   const [billingName, setBillingName] = useState("");
   const [billingEmail, setBillingEmail] = useState("");
@@ -493,13 +493,8 @@ export default function Home() {
     pricingConfig.discountTiers,
     locationMultiplier,
   ]);
-  const cardConvenienceFee =
-    paymentMethod === "card"
-      ? Math.round(estimate.amount * 0.03 * 100) / 100
-      : 0;
-  const taxableSubtotal = estimate.amount + cardConvenienceFee;
+  const taxableSubtotal = estimate.amount;
   const orderTotal = taxableSubtotal + salesTax;
-  const invoiceBillingProminent = estimate.amount > 2000;
 
   useEffect(() => {
     if (checkoutStep !== 2 || zipCode.length !== 5 || taxableSubtotal <= 0) {
@@ -651,7 +646,7 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function prepareCardAuthorization(
+  async function preparePaymentAuthorization(
     event: React.MouseEvent<HTMLButtonElement>,
   ) {
     const form = event.currentTarget.form;
@@ -682,7 +677,6 @@ export default function Home() {
           zipCode,
           selection,
           estimatedAmountCents: Math.round(orderTotal * 100),
-          paymentMethod,
           salesTaxCents: Math.round(salesTax * 100),
           taxCalculationId,
         }),
@@ -693,7 +687,7 @@ export default function Home() {
         publishableKey?: string;
       };
       if (!response.ok || !data.clientSecret || !data.publishableKey) {
-        throw new Error(data.error ?? "Secure card entry could not be started.");
+        throw new Error(data.error ?? "Secure payment entry could not be started.");
       }
       setStripeClientSecret(data.clientSecret);
       setStripePublishableKey(data.publishableKey);
@@ -701,14 +695,14 @@ export default function Home() {
       setStripeError(
         error instanceof Error
           ? error.message
-          : "Secure card entry could not be started.",
+          : "Secure payment entry could not be started.",
       );
     } finally {
       setStripePreparing(false);
     }
   }
 
-  function completeCardAuthorization() {
+  function completePaymentAuthorization() {
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -731,11 +725,9 @@ export default function Home() {
           <h1>Your property is ready for scope review.</h1>
           <p>
             We captured your {propertyType.toLowerCase()} project at{" "}
-            {squareFeet.toLocaleString()} square feet. {paymentMethod === "card"
-              ? "Your card was securely verified and saved with Stripe; no charge was made."
-              : paymentMethod === "bank"
-                ? "Your bank account was securely verified and saved with Stripe; no charge was made."
-                : "Your request for invoice payment was recorded."} A commercial
+            {squareFeet.toLocaleString()} square feet. {paymentMethod === "stripe"
+              ? "Your payment method was securely verified and saved with Stripe; no charge was made."
+              : "Your request for invoice payment was recorded."} A commercial
             project specialist will confirm access, deliverables and final
             pricing.
           </p>
@@ -1275,87 +1267,37 @@ export default function Home() {
                 <p className="kicker">Order summary & payment</p>
                 <h2>Confirm your service request</h2>
                 <p>
-                  Securely verify a card or bank account with Stripe, or request
-                  invoice payment. Cards include a 3% convenience fee; bank
-                  accounts have no fee. No charge is made when submitted.
+                  Pay securely by credit card or ACH transfer, or request
+                  invoice billing for a qualifying account. No charge is made
+                  when this request is submitted.
                 </p>
               </div>
             </div>
-            {invoiceBillingProminent ? (
-              <div className="payment-toggle payment-toggle-three">
-                <button
-                  type="button"
-                  className={paymentMethod === "card" ? "selected" : ""}
-                  onClick={() => choosePaymentMethod("card")}
-                  aria-pressed={paymentMethod === "card"}
-                >
-                  <span>Credit card</span>
-                  <small>Securely save · 3% convenience fee</small>
-                </button>
-                <button
-                  type="button"
-                  className={paymentMethod === "bank" ? "selected" : ""}
-                  onClick={() => choosePaymentMethod("bank")}
-                  aria-pressed={paymentMethod === "bank"}
-                >
-                  <span>Bank account</span>
-                  <small>Secure ACH verification · no fee</small>
-                </button>
-                <button
-                  type="button"
-                  className={paymentMethod === "invoice" ? "selected" : ""}
-                  onClick={() => choosePaymentMethod("invoice")}
-                  aria-pressed={paymentMethod === "invoice"}
-                >
-                  <span>Request Invoice as Payment</span>
-                  <small>Available for larger commercial orders</small>
-                </button>
-              </div>
-            ) : (
-              <div className="invoice-qualification">
-                <div className="payment-toggle">
-                  <button
-                    type="button"
-                    className={paymentMethod === "card" ? "selected" : ""}
-                    onClick={() => choosePaymentMethod("card")}
-                    aria-pressed={paymentMethod === "card"}
-                  >
-                    <span>Credit card</span>
-                    <small>Securely save · 3% convenience fee</small>
-                  </button>
-                  <button
-                    type="button"
-                    className={paymentMethod === "bank" ? "selected" : ""}
-                    onClick={() => choosePaymentMethod("bank")}
-                    aria-pressed={paymentMethod === "bank"}
-                  >
-                    <span>Bank account</span>
-                    <small>Secure ACH verification · no fee</small>
-                  </button>
-                </div>
-                {paymentMethod !== "invoice" ? (
-                  <button
-                    type="button"
-                    className="invoice-qualification-link"
-                    onClick={() => choosePaymentMethod("invoice")}
-                  >
-                    Want to qualify for Invoice Billing?
-                  </button>
-                ) : (
-                  <div className="invoice-request-choice">
-                    <div>
-                      <strong>Invoice billing requested</strong>
-                      <small>
-                        We’ll review eligibility with your service request.
-                      </small>
-                    </div>
-                    <button type="button" onClick={() => choosePaymentMethod("card")}>
-                      Use credit card instead
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="payment-toggle">
+              <button
+                type="button"
+                className={paymentMethod === "stripe" ? "selected" : ""}
+                onClick={() => choosePaymentMethod("stripe")}
+                aria-pressed={paymentMethod === "stripe"}
+              >
+                <span>Credit Card / ACH</span>
+                <small>Pay with Credit Card or ACH transfer.</small>
+              </button>
+              <button
+                type="button"
+                className={paymentMethod === "invoice" ? "selected" : ""}
+                onClick={() => choosePaymentMethod("invoice")}
+                aria-pressed={paymentMethod === "invoice"}
+              >
+                <span>Invoice Billing</span>
+                <small>Qualifying accounts may pay via invoice.</small>
+              </button>
+            </div>
+            <p className="billing-details-intro">
+              {paymentMethod === "invoice"
+                ? "Provide the billing contact and accounts-payable details for invoice review."
+                : "Enter the payment contact before opening the secure Stripe payment form."}
+            </p>
             <div className="field-grid">
               <label>
                 Billing contact
@@ -1364,7 +1306,7 @@ export default function Home() {
                   name="billing-name"
                   placeholder="Full name"
                   value={billingName}
-                  disabled={paymentMethod !== "invoice" && Boolean(stripeClientSecret)}
+                  disabled={paymentMethod === "stripe" && Boolean(stripeClientSecret)}
                   onChange={(event) => setBillingName(event.target.value)}
                 />
               </label>
@@ -1376,7 +1318,7 @@ export default function Home() {
                   type="email"
                   placeholder="billing@company.com"
                   value={billingEmail}
-                  disabled={paymentMethod !== "invoice" && Boolean(stripeClientSecret)}
+                  disabled={paymentMethod === "stripe" && Boolean(stripeClientSecret)}
                   onChange={(event) => setBillingEmail(event.target.value)}
                 />
               </label>
@@ -1393,18 +1335,17 @@ export default function Home() {
                 </>
               )}
             </div>
-            {paymentMethod !== "invoice" && (
+            {paymentMethod === "stripe" && (
               <div className="stripe-authorization-section">
                 {!stripeClientSecret ? (
                   <>
                     <div className="stripe-explainer">
-                      <strong>
-                        Secure {paymentMethod === "card" ? "card" : "bank account"} verification
-                      </strong>
+                      <strong>Secure Credit Card / ACH verification</strong>
                       <p>
-                        Stripe will verify and save the {paymentMethod === "card" ? "card" : "bank account"} for the final
-                        confirmed project {paymentMethod === "card" ? "charge" : "ACH debit"}. This does not place a hold or
-                        charge the current estimate.{paymentMethod === "card" && " A 3% convenience fee will be added to the final card charge."}
+                        Stripe will let you choose a credit card or ACH transfer
+                        and securely save that payment method for the final
+                        confirmed project amount. This does not place a hold or
+                        charge the current estimate.
                       </p>
                     </div>
                     {stripeError && <p className="stripe-error">{stripeError}</p>}
@@ -1412,20 +1353,19 @@ export default function Home() {
                       type="button"
                       className="primary-button"
                       disabled={stripePreparing || taxStatus === "loading"}
-                      onClick={prepareCardAuthorization}
+                      onClick={preparePaymentAuthorization}
                     >
                       {stripePreparing
-                        ? `Opening secure ${paymentMethod === "card" ? "card" : "bank account"} entry…`
-                        : `Continue to Secure ${paymentMethod === "card" ? "Card" : "Bank Account"} Entry`}
+                        ? "Opening secure payment entry…"
+                        : "Continue to Secure Payment Entry"}
                     </button>
                   </>
                 ) : stripePublishableKey ? (
-                  <StripeCardSetup
+                  <StripePaymentSetup
                     billingName={billingName}
                     billingEmail={billingEmail}
                     clientSecret={stripeClientSecret}
-                    onComplete={completeCardAuthorization}
-                    paymentMethod={paymentMethod}
+                    onComplete={completePaymentAuthorization}
                     publishableKey={stripePublishableKey}
                   />
                 ) : (
@@ -1474,11 +1414,9 @@ export default function Home() {
           <div className="summary-metric">
             <span>Payment</span>
             <strong>
-              {paymentMethod === "card"
-                ? "Credit card · 3% fee"
-                : paymentMethod === "bank"
-                  ? "Bank account · no fee"
-                  : "Invoice requested"}
+              {paymentMethod === "stripe"
+                ? "Credit Card / ACH"
+                : "Invoice Billing requested"}
             </strong>
           </div>
           <div className="summary-metric">
@@ -1504,12 +1442,6 @@ export default function Home() {
               </p>
             )}
           </div>
-          {cardConvenienceFee > 0 && (
-            <div className="summary-line-item fee">
-              <span>Card convenience fee (3%)</span>
-              <strong>{money(cardConvenienceFee)}</strong>
-            </div>
-          )}
           <div className="summary-line-item tax">
             <span>Sales tax</span>
             <strong>

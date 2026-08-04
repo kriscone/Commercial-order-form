@@ -12,7 +12,6 @@ type SetupRequest = {
   zipCode?: string;
   selection?: string;
   estimatedAmountCents?: number;
-  paymentMethod?: "card" | "bank";
   salesTaxCents?: number;
   taxCalculationId?: string;
 };
@@ -37,7 +36,6 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SetupRequest;
     const billingName = body.billingName?.trim();
     const billingEmail = body.billingEmail?.trim();
-    const paymentMethod = body.paymentMethod === "bank" ? "bank" : "card";
 
     if (!billingName || !billingEmail || !billingEmail.includes("@")) {
       return NextResponse.json(
@@ -57,7 +55,7 @@ export async function POST(request: Request) {
       zip_code: metadataValue(body.zipCode),
       selection: metadataValue(body.selection),
       estimated_amount_cents: metadataValue(body.estimatedAmountCents),
-      payment_method: paymentMethod,
+      payment_method: "card_or_ach",
       sales_tax_cents: metadataValue(body.salesTaxCents),
       tax_calculation_id: metadataValue(body.taxCalculationId),
     };
@@ -72,13 +70,10 @@ export async function POST(request: Request) {
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
       usage: "off_session",
-      payment_method_types: [
-        paymentMethod === "bank" ? "us_bank_account" : "card",
-      ],
-      payment_method_options:
-        paymentMethod === "bank"
-          ? { us_bank_account: { verification_method: "instant" } }
-          : undefined,
+      payment_method_types: ["card", "us_bank_account"],
+      payment_method_options: {
+        us_bank_account: { verification_method: "instant" },
+      },
       metadata: orderMetadata,
     });
 

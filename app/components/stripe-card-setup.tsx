@@ -9,12 +9,11 @@ import {
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 
-type StripeCardSetupProps = {
+type StripePaymentSetupProps = {
   billingName: string;
   billingEmail: string;
   clientSecret: string;
   onComplete: () => void;
-  paymentMethod: "card" | "bank";
   publishableKey: string;
 };
 
@@ -22,8 +21,7 @@ function CardSetupForm({
   billingName,
   billingEmail,
   onComplete,
-  paymentMethod,
-}: Omit<StripeCardSetupProps, "clientSecret" | "publishableKey">) {
+}: Omit<StripePaymentSetupProps, "clientSecret" | "publishableKey">) {
   const stripe = useStripe();
   const elements = useElements();
   const [consent, setConsent] = useState(false);
@@ -51,8 +49,7 @@ function CardSetupForm({
 
     if (error) {
       setErrorMessage(
-        error.message ??
-          `Stripe could not verify this ${paymentMethod === "card" ? "card" : "bank account"}.`,
+        error.message ?? "Stripe could not verify this payment method.",
       );
       setSubmitting(false);
       return;
@@ -79,9 +76,9 @@ function CardSetupForm({
           onChange={(event) => setConsent(event.target.checked)}
         />
         <span>
-          I authorize FloorPlanOnline to securely save this {paymentMethod === "card" ? "card" : "bank account"} and
-          {paymentMethod === "card" ? " charge" : " debit"} the final confirmed project amount after scope approval.
-          {paymentMethod === "card" && " A 3% convenience fee will apply."} No charge is made when this request is submitted.
+          I authorize FloorPlanOnline to securely save the selected payment
+          method and charge or debit the final confirmed project amount after
+          scope approval. No charge is made when this request is submitted.
         </span>
       </label>
       {errorMessage && <p className="stripe-error">{errorMessage}</p>}
@@ -92,8 +89,8 @@ function CardSetupForm({
         onClick={authorizePaymentMethod}
       >
         {submitting
-          ? `Verifying ${paymentMethod === "card" ? "card" : "bank account"}…`
-          : `Verify ${paymentMethod === "card" ? "Card" : "Bank Account"} & Submit Request`}
+          ? "Verifying payment method…"
+          : "Verify Payment Method & Submit Request"}
       </button>
       <small className="stripe-security-note">
         Payment details are entered directly into Stripe and are not stored by
@@ -103,7 +100,7 @@ function CardSetupForm({
   );
 }
 
-export function StripeCardSetup(props: StripeCardSetupProps) {
+export function StripePaymentSetup(props: StripePaymentSetupProps) {
   const stripePromise = useMemo(
     () => loadStripe(props.publishableKey),
     [props.publishableKey],
@@ -128,7 +125,6 @@ export function StripeCardSetup(props: StripeCardSetupProps) {
         billingName={props.billingName}
         billingEmail={props.billingEmail}
         onComplete={props.onComplete}
-        paymentMethod={props.paymentMethod}
       />
     </Elements>
   );
