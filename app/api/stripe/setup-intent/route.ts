@@ -13,6 +13,8 @@ type SetupRequest = {
   selection?: string;
   estimatedAmountCents?: number;
   paymentMethod?: "card" | "bank";
+  salesTaxCents?: number;
+  taxCalculationId?: string;
 };
 
 function metadataValue(value: unknown) {
@@ -56,6 +58,8 @@ export async function POST(request: Request) {
       selection: metadataValue(body.selection),
       estimated_amount_cents: metadataValue(body.estimatedAmountCents),
       payment_method: paymentMethod,
+      sales_tax_cents: metadataValue(body.salesTaxCents),
+      tax_calculation_id: metadataValue(body.taxCalculationId),
     };
 
     const customer = await stripe.customers.create({

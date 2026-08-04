@@ -31,6 +31,8 @@ test("server-renders the commercial order form", async () => {
   assert.match(html, /Bank account/i);
   assert.match(html, /3% convenience fee/i);
   assert.match(html, /no fee/i);
+  assert.match(html, /Sales tax/i);
+  assert.match(html, /Calculated at review/i);
   assert.match(html, /Request Invoice as Payment/i);
   assert.match(html, /Email for main on-site contact/i);
   assert.match(html, /multiple emails, separated by a comma/i);
@@ -51,4 +53,20 @@ test("pricing endpoint provides items, marginal tiers and ZIP multipliers", asyn
     [0, 0.2, 0.3, 0.45, 0.55],
   );
   assert.equal(config.locationMultipliers["10001"], 2);
+});
+
+test("tax endpoint validates the property ZIP before contacting Stripe", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("tax-test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/api/stripe/tax-calculation", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ amountCents: 10000, postalCode: "bad" }),
+    }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  assert.equal(response.status, 400);
 });

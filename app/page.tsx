@@ -315,6 +315,11 @@ export default function Home() {
   const [stripePublishableKey, setStripePublishableKey] = useState("");
   const [stripePreparing, setStripePreparing] = useState(false);
   const [stripeError, setStripeError] = useState("");
+  const [salesTax, setSalesTax] = useState(0);
+  const [taxCalculationId, setTaxCalculationId] = useState("");
+  const [taxStatus, setTaxStatus] = useState<
+    "idle" | "loading" | "ready" | "unavailable"
+  >("idle");
   const [submitted, setSubmitted] = useState(false);
   const landAreaAcres = landAreaToAcres(landAreaValue, landAreaUnit);
 
@@ -492,8 +497,56 @@ export default function Home() {
     paymentMethod === "card"
       ? Math.round(estimate.amount * 0.03 * 100) / 100
       : 0;
-  const orderTotal = estimate.amount + cardConvenienceFee;
+  const taxableSubtotal = estimate.amount + cardConvenienceFee;
+  const orderTotal = taxableSubtotal + salesTax;
   const invoiceBillingProminent = estimate.amount > 2000;
+
+  useEffect(() => {
+    if (checkoutStep !== 2 || zipCode.length !== 5 || taxableSubtotal <= 0) {
+      setSalesTax(0);
+      setTaxCalculationId("");
+      setTaxStatus("idle");
+      return;
+    }
+
+    let active = true;
+    setTaxStatus("loading");
+    const timeout = window.setTimeout(() => {
+      fetch("/api/stripe/tax-calculation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountCents: Math.round(taxableSubtotal * 100),
+          postalCode: zipCode,
+        }),
+      })
+        .then(async (response) => {
+          const data = (await response.json()) as {
+            calculationId?: string;
+            error?: string;
+            taxAmountCents?: number;
+          };
+          if (!response.ok || typeof data.taxAmountCents !== "number") {
+            throw new Error(data.error ?? "Sales tax could not be calculated.");
+          }
+          if (!active) return;
+          setSalesTax(data.taxAmountCents / 100);
+          setTaxCalculationId(data.calculationId ?? "");
+          setTaxStatus("ready");
+        })
+        .catch(() => {
+          if (!active) return;
+          setSalesTax(0);
+          setTaxCalculationId("");
+          setTaxStatus("unavailable");
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [checkoutStep, taxableSubtotal, zipCode]);
 
   function choosePaymentMethod(nextMethod: PaymentMethod) {
     setPaymentMethod(nextMethod);
@@ -630,6 +683,8 @@ export default function Home() {
           selection,
           estimatedAmountCents: Math.round(orderTotal * 100),
           paymentMethod,
+          salesTaxCents: Math.round(salesTax * 100),
+          taxCalculationId,
         }),
       });
       const data = (await response.json()) as {
@@ -1356,7 +1411,7 @@ export default function Home() {
                     <button
                       type="button"
                       className="primary-button"
-                      disabled={stripePreparing}
+                      disabled={stripePreparing || taxStatus === "loading"}
                       onClick={prepareCardAuthorization}
                     >
                       {stripePreparing
@@ -1455,9 +1510,25 @@ export default function Home() {
               <strong>{money(cardConvenienceFee)}</strong>
             </div>
           )}
+          <div className="summary-line-item tax">
+            <span>Sales tax</span>
+            <strong>
+              {taxStatus === "loading"
+                ? "Calculating…"
+                : taxStatus === "ready"
+                  ? money(salesTax)
+                  : taxStatus === "unavailable"
+                    ? "Pending confirmation"
+                    : "Calculated at review"}
+            </strong>
+          </div>
           <div className="summary-divider summary-total-divider" />
           <div className="summary-total">
-            <span>Current estimated total</span>
+            <span>
+              {taxStatus === "ready"
+                ? "Current estimated total"
+                : "Current estimate before tax"}
+            </span>
             <strong>{money(orderTotal)}</strong>
           </div>
           {estimate.requiresReview && (
@@ -1474,7 +1545,11 @@ export default function Home() {
               Review Order
             </button>
           ) : paymentMethod === "invoice" ? (
-            <button className="primary-button" type="submit">
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={taxStatus === "loading"}
+            >
               Submit Service Request
             </button>
           ) : (
