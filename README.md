@@ -31,6 +31,10 @@ value on OMS as `COMMERCIAL_ORDER_API_KEY`. Configure
 to one account; leave it unset when multiple commercial brands share an OMS API.
 Each resolved account must inherit a brand configured with
 `orderFlow: "commercial"`.
+
+For OMS staging, the API base is `https://dev.vifp.com/api/v1` (the staging OMS
+SPA calls the same host under `/api/v1`). Use the production OMS API base only
+after its deployment URL and intake key have been configured.
 The form loads its logo, company name, products, services, and add-ons from the
 selected OMS brand. It uses built-in commercial choices only for
 `floorplanonline` while that brand's catalog is empty. Other brands must
