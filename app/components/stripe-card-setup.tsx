@@ -12,14 +12,16 @@ import { loadStripe } from "@stripe/stripe-js";
 type StripePaymentSetupProps = {
   billingName: string;
   billingEmail: string;
+  companyName: string;
   clientSecret: string;
-  onComplete: () => void;
+  onComplete: (setupIntentId?: string) => void | Promise<void>;
   publishableKey: string;
 };
 
 function CardSetupForm({
   billingName,
   billingEmail,
+  companyName,
   onComplete,
 }: Omit<StripePaymentSetupProps, "clientSecret" | "publishableKey">) {
   const stripe = useStripe();
@@ -56,7 +58,8 @@ function CardSetupForm({
     }
 
     if (setupIntent?.status === "succeeded") {
-      onComplete();
+      await onComplete(setupIntent.id);
+      setSubmitting(false);
       return;
     }
 
@@ -76,7 +79,7 @@ function CardSetupForm({
           onChange={(event) => setConsent(event.target.checked)}
         />
         <span>
-          I authorize FloorPlanOnline to securely save the selected payment
+          I authorize {companyName} to securely save the selected payment
           method and charge or debit the final confirmed project amount after
           scope approval. No charge is made when this request is submitted.
         </span>
@@ -94,7 +97,7 @@ function CardSetupForm({
       </button>
       <small className="stripe-security-note">
         Payment details are entered directly into Stripe and are not stored by
-        FloorPlanOnline.
+        {` ${companyName}`}.
       </small>
     </div>
   );
@@ -124,6 +127,7 @@ export function StripePaymentSetup(props: StripePaymentSetupProps) {
       <CardSetupForm
         billingName={props.billingName}
         billingEmail={props.billingEmail}
+        companyName={props.companyName}
         onComplete={props.onComplete}
       />
     </Elements>

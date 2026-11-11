@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { StripePaymentSetup } from "@/app/components/stripe-card-setup";
+import { COMMERCIAL_PAYMENT_CONSENT_VERSION } from "@/lib/payment-consent";
+import { brandLogoForForm, fallbackBrandName, type CommercialBrandConfig } from "@/lib/brand-config";
 import {
   fallbackPricingConfig,
   inferLandAreaUnit,
@@ -14,14 +16,58 @@ import {
   type PricingConfig,
 } from "@/lib/pricing";
 
-type PackageId = "market" | "plan" | "build" | "custom";
+type PackageId = string;
 type PaymentMethod = "stripe" | "invoice";
 type LandAreaUnit = "acres" | "square_feet";
-type TourOptionId =
-  | "walkthrough"
-  | "photo-tour"
-  | "floorplan-tour"
-  | "components-only";
+type TourOptionId = string;
+
+type CatalogEntry = {
+  key: string;
+  name: string;
+  description?: string;
+  price?: number;
+  active?: boolean;
+  metadata?: Record<string, any>;
+};
+
+type CommercialCatalog = {
+  products: CatalogEntry[];
+  services: CatalogEntry[];
+  addons: CatalogEntry[];
+};
+
+type ActivePackage = {
+  id: string;
+  pricingCode: string;
+  name: string;
+  description: string;
+  eyebrow: string;
+  includes: string[];
+  recommended?: boolean;
+  price?: number;
+  metadata?: Record<string, any>;
+};
+
+type ActiveTourOption = {
+  id: string;
+  pricingCode: string;
+  name: string;
+  detail: string;
+  includes: string[];
+  price?: number;
+  metadata?: Record<string, any>;
+};
+
+type ActiveSelectableItem = {
+  id: string;
+  pricingCode: string;
+  name: string;
+  detail: string;
+  type: string;
+  price?: number;
+  requirements?: string[];
+  metadata?: Record<string, any>;
+};
 
 const propertyTypes = [
   "Office",
@@ -304,10 +350,16 @@ export default function Home() {
   const [pricingConfig, setPricingConfig] = useState<PricingConfig>(
     fallbackPricingConfig,
   );
+  const [brandCatalog, setBrandCatalog] = useState<CommercialCatalog | null>(null);
+  const [catalogBrandKey, setCatalogBrandKey] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
+  const [brandConfig, setBrandConfig] = useState<CommercialBrandConfig | null>(null);
   const [packageId, setPackageId] = useState<PackageId>("custom");
   const [customTour, setCustomTour] =
     useState<TourOptionId>("walkthrough");
   const [selectedCustom, setSelectedCustom] = useState<string[]>([]);
+  const [addonQuantities, setAddonQuantities] = useState<Record<string, number>>({});
   const [additionalPhotoPacks, setAdditionalPhotoPacks] = useState(0);
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("stripe");
@@ -324,6 +376,10 @@ export default function Home() {
     "idle" | "loading" | "ready" | "unavailable"
   >("idle");
   const [submitted, setSubmitted] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
+  const [submittedOrderId, setSubmittedOrderId] = useState<number | null>(null);
+  const [orderRequestId] = useState(() => crypto.randomUUID());
   const landAreaAcres = landAreaToAcres(landAreaValue, landAreaUnit);
 
   function changeLandAreaUnit(nextUnit: LandAreaUnit) {
@@ -339,50 +395,333 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     fetch("/api/pricing")
-      .then((response) => response.json())
-      .then((config: PricingConfig) => {
+      .then((response) => {
+        if (!response.ok) throw new Error("Commercial catalog unavailable");
+        return response.json();
+      })
+      .then((config: PricingConfig & { brandCatalog?: CommercialCatalog; brandKey?: string; brandConfig?: CommercialBrandConfig | null }) => {
+        const brandKey = String(config.brandKey || "").trim().toLowerCase();
+        if (!/^[a-z0-9][a-z0-9-]{1,79}$/.test(brandKey)) {
+          throw new Error("Commercial brand is not configured");
+        }
         if (active && config.items?.length && config.discountTiers?.length) {
           setPricingConfig(config);
         }
+        if (active && config.brandCatalog) {
+          setBrandCatalog(config.brandCatalog);
+          const firstPrimaryService = config.brandCatalog.services?.find(
+            (item) => item.active !== false && item.metadata?.selectionMode === "primary",
+          );
+          if (firstPrimaryService) setCustomTour(firstPrimaryService.key);
+        }
+        if (active) setCatalogBrandKey(brandKey);
+        if (active && config.brandConfig) setBrandConfig(config.brandConfig);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setCatalogError("The commercial catalog could not be loaded. Refresh this page or contact support before placing an order.");
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false);
+      });
     return () => {
       active = false;
     };
   }, []);
 
+  const brandName = brandConfig?.companyName?.trim() || fallbackBrandName(catalogBrandKey);
+  const brandProductName = brandConfig?.productName?.trim() || brandName;
+  const brandLogo = brandLogoForForm(catalogBrandKey, brandConfig?.logoSrc, brandConfig?.orderFormLogoSrc);
+  const catalogReady = !catalogLoading && !catalogError && Boolean(catalogBrandKey);
+
+  useEffect(() => {
+    document.title = `${brandProductName} Commercial | Order Property Media & Plans`;
+  }, [brandProductName]);
+
   const pricingByCode = useMemo(
     () => new Map(pricingConfig.items.map((item) => [item.code, item])),
     [pricingConfig.items],
   );
+
+  const hasConfiguredCatalog = Boolean(
+    brandCatalog && (
+      (brandCatalog.products?.length ?? 0) > 0 ||
+      (brandCatalog.services?.length ?? 0) > 0 ||
+      (brandCatalog.addons?.length ?? 0) > 0
+    ),
+  );
+  const isFpoBrand = catalogBrandKey === "floorplanonline";
+  const useFpoDefaults = isFpoBrand && !hasConfiguredCatalog;
+  function hasPricingSource(item: { id: string; pricingCode: string; price?: number; metadata?: Record<string, any> }) {
+    return typeof item.price === "number" ||
+      Boolean(item.metadata?.pricing) ||
+      Boolean(item.pricingCode) ||
+      (useFpoDefaults && item.id === "components-only");
+  }
+  const activePackages: ActivePackage[] = (hasConfiguredCatalog
+    ? (brandCatalog?.products || []).filter((entry) => entry.active !== false).map((entry) => {
+        const fallback = catalogBrandKey === "floorplanonline"
+          ? packages.find((item) => item.id === entry.key)
+          : undefined;
+        return {
+          ...(fallback || { id: entry.key, pricingCode: entry.key, eyebrow: "Commercial product", includes: [] }),
+          id: entry.key,
+          pricingCode: entry.metadata?.pricingCode || "",
+          name: entry.name,
+          description: entry.description || fallback?.description || "",
+          eyebrow: entry.metadata?.eyebrow || fallback?.eyebrow || "Commercial product",
+          recommended: entry.metadata?.recommended === true || fallback?.recommended,
+          includes: entry.metadata?.includes || fallback?.includes || [],
+          price: entry.price,
+          metadata: entry.metadata,
+        };
+      })
+    : useFpoDefaults ? packages : []).filter(hasPricingSource);
+  const configuredServices = brandCatalog?.services?.filter((entry) => entry.active !== false) || [];
+  const activeTourOptions: ActiveTourOption[] = (hasConfiguredCatalog
+    ? configuredServices.filter((entry) => entry.metadata?.selectionMode === "primary").map((entry) => {
+        const fallback = catalogBrandKey === "floorplanonline"
+          ? customTourOptions.find((item) => item.id === entry.key)
+          : undefined;
+        return {
+          ...(fallback || { id: entry.key, pricingCode: entry.key, name: entry.name, detail: entry.description || "", includes: [] }),
+          id: entry.key,
+          pricingCode: entry.metadata?.pricingCode || "",
+          name: entry.name,
+          detail: entry.description || fallback?.detail || "",
+          includes: entry.metadata?.includes || fallback?.includes || [],
+          price: entry.price,
+          metadata: entry.metadata,
+        };
+      })
+    : useFpoDefaults ? customTourOptions : []).filter(hasPricingSource);
+  const activeAlacarteDeliverables: ActiveSelectableItem[] = (hasConfiguredCatalog
+    ? configuredServices.filter((entry) => entry.metadata?.selectionMode === "alacarte").map((entry) => {
+        const fallback = catalogBrandKey === "floorplanonline"
+          ? customDeliverables.find((item) => item.id === entry.key)
+          : undefined;
+        return {
+          ...(fallback || { id: entry.key, pricingCode: entry.key, name: entry.name, detail: entry.description || "", type: "scaled" }),
+          id: entry.key,
+          pricingCode: entry.metadata?.pricingCode || "",
+          name: entry.name,
+          detail: entry.description || fallback?.detail || "",
+          type: entry.metadata?.pricingType || fallback?.type || "scaled",
+          price: entry.price,
+          requirements: entry.metadata?.requires || [],
+          metadata: entry.metadata,
+        };
+      })
+    : useFpoDefaults ? aLaCarteDeliverables : []).filter(hasPricingSource);
+  const activeCustomAddons: ActiveSelectableItem[] = (hasConfiguredCatalog
+    ? (brandCatalog?.addons || []).filter((entry) => entry.active !== false).map((entry) => {
+        const fallback = catalogBrandKey === "floorplanonline"
+          ? customDeliverables.find((item) => item.id === entry.key)
+          : undefined;
+        return {
+          ...(fallback || { id: entry.key, pricingCode: entry.key, name: entry.name, detail: entry.description || "", type: "scaled" }),
+          id: entry.key,
+          pricingCode: entry.metadata?.pricingCode || "",
+          name: entry.name,
+          detail: entry.description || fallback?.detail || "",
+          type: entry.metadata?.pricingType || fallback?.type || "scaled",
+          price: entry.price,
+          requirements: entry.metadata?.requires || [],
+          metadata: entry.metadata,
+        };
+      })
+    : useFpoDefaults ? customAddons : []).filter(hasPricingSource);
+  const activeAlacarteIds = activeAlacarteDeliverables.map((item) => item.id);
+
+  function priceForCatalogEntry(entry: { price?: number; pricingCode: string; metadata?: Record<string, any> }) {
+    if (typeof entry.price === "number") return entry.price;
+    const rule = entry.metadata?.pricing;
+    if (rule && typeof rule === "object" && typeof rule.pricingType === "string") {
+      const basePrice = Number(rule.basePrice);
+      const incrementSize = Number(rule.incrementSize ?? 0);
+      const incrementPrice = Number(rule.incrementPrice);
+      if (!Number.isFinite(basePrice) || basePrice < 0 ||
+          ((rule.pricingType === "per_1000_sqft" || rule.pricingType === "per_half_acre") &&
+            (incrementSize <= 0 || !Number.isFinite(incrementPrice) || incrementPrice < 0))) {
+        throw new Error(`Pricing for "${entry.pricingCode || "catalog item"}" is incomplete.`);
+      }
+      const pricingItem = {
+        code: "brand_catalog_item",
+        category: "brand_catalog",
+        displayName: "Brand catalog item",
+        pricingType: rule.pricingType,
+        baseCoverage: Number(rule.baseCoverage ?? 0),
+        basePrice,
+        incrementSize,
+        incrementPrice: Number.isFinite(incrementPrice) ? incrementPrice : 0,
+        active: true,
+        sortOrder: 0,
+        description: "",
+      } as const;
+      const ruleTiers = Array.isArray(rule.discountTiers) ? rule.discountTiers : [];
+      const multiplier = Number(rule.locationMultipliers?.[zipCode] ?? 1);
+      return priceForItem(
+        pricingItem as any,
+        pricingAreaForItem(pricingItem as any, squareFeet, landAreaAcres),
+        ruleTiers,
+        multiplier,
+      );
+    }
+    return priceForCode(entry.pricingCode);
+  }
+  function supportsMultipleUnits(item: ActiveSelectableItem, isAddon = false) {
+    return isAddon && (
+      item.metadata?.allowQuantity === true ||
+      item.metadata?.pricing?.pricingType === "quantity"
+    );
+  }
+  function catalogRateDescription(entry: {
+    id: string;
+    price?: number;
+    pricingCode: string;
+    type?: string;
+    metadata?: Record<string, any>;
+  }) {
+    if (typeof entry.price === "number") return `${money(entry.price)} fixed`;
+    const rule = entry.metadata?.pricing;
+    if (rule && typeof rule === "object") {
+      const multiplier = Number(rule.locationMultipliers?.[zipCode] ?? 1);
+      const basePrice = Number(rule.basePrice ?? 0) * multiplier;
+      const incrementPrice = Number(rule.incrementPrice ?? 0) * multiplier;
+      const baseCoverage = Number(rule.baseCoverage ?? 0);
+      const incrementSize = Number(rule.incrementSize ?? 0);
+      if (rule.pricingType === "flat") return `${money(basePrice)} flat`;
+      if (rule.pricingType === "quantity") return `${money(basePrice)} per unit`;
+      if (rule.pricingType === "per_half_acre") {
+        return `${money(basePrice)} through ${baseCoverage.toLocaleString()} sq ft + ${money(incrementPrice)} per additional ${incrementSize.toLocaleString()} sq ft`;
+      }
+      if (rule.pricingType === "per_1000_sqft") {
+        return `${money(basePrice)} base through ${baseCoverage.toLocaleString()} sq ft + ${money(incrementPrice)} per additional ${incrementSize.toLocaleString()} sq ft`;
+      }
+    }
+    const pricingItem = pricingByCode.get(entry.pricingCode);
+    if (!pricingItem) return "Price varies by project scope";
+    const multiplier = locationMultiplierForItem(pricingItem, locationMultiplier);
+    if (pricingItem.pricingType === "flat") return `${money(pricingItem.basePrice * multiplier)} flat`;
+    if (pricingItem.pricingType === "quantity") return `${money(pricingItem.basePrice * multiplier)} per unit`;
+    const incrementLabel = pricingItem.pricingType === "per_half_acre"
+      ? "additional 1/2 acre"
+      : `additional ${pricingItem.incrementSize.toLocaleString()} sq ft`;
+    const baseLabel = pricingItem.pricingType === "per_half_acre"
+      ? `${pricingItem.baseCoverage.toLocaleString()} sq ft`
+      : `${pricingItem.baseCoverage.toLocaleString()} sq ft`;
+    const description = `${money(pricingItem.basePrice * multiplier)} base through ${baseLabel} + ${money(pricingItem.incrementPrice * multiplier)} per ${incrementLabel}`;
+    return isFpoBrand && entry.id === "tagging"
+      ? `${description} · available with 3D tour options only`
+      : description;
+  }
   const locationMultiplier = pricingConfig.locationMultipliers[zipCode] ?? 1;
-  const isNycPricing = locationMultiplier > 1;
-  const canAddPhotoPacks =
-    customTour === "photo-tour" ||
-    (customTour === "components-only" &&
-      selectedCustom.includes("photography"));
+  const selectedPackage = activePackages.find((item) => item.id === packageId);
+  const selectedTourOption = activeTourOptions.find((option) => option.id === customTour);
+  const selectedAlacarteServices = activeAlacarteDeliverables.filter((item) => selectedCustom.includes(item.id));
+  const photoPackCatalogItem = activeCustomAddons.find((item) => item.id === "additional-pro-photos");
+  const selectableCustomAddons = isFpoBrand
+    ? activeCustomAddons.filter((item) => item.id !== "additional-pro-photos")
+    : activeCustomAddons;
+  const canAddPhotoPacks = catalogBrandKey === "floorplanonline" && (
+    useFpoDefaults
+      ? customTour === "photo-tour" || (customTour === "components-only" && selectedCustom.includes("photography"))
+      : Boolean(photoPackCatalogItem && selectedTourOption?.metadata?.allowsPhotoPacks === true &&
+          (customTour !== "components-only" || selectedCustom.includes("photography")))
+  );
+  const selectedPricingEntries = packageId === "custom"
+    ? [
+        selectedTourOption && !(isFpoBrand && customTour === "components-only") ? selectedTourOption : undefined,
+        ...activeAlacarteDeliverables.filter((item) => selectedCustom.includes(item.id)),
+        ...activeCustomAddons.filter((item) => selectedCustom.includes(item.id)),
+        canAddPhotoPacks && additionalPhotoPacks > 0 ? photoPackCatalogItem : undefined,
+      ].filter((item): item is ActiveTourOption | ActiveSelectableItem => Boolean(item))
+    : [
+        selectedPackage,
+        ...activeAlacarteDeliverables.filter((item) => selectedCustom.includes(item.id)),
+        ...activeCustomAddons.filter((item) => selectedCustom.includes(item.id)),
+      ].filter((item): item is ActivePackage | ActiveSelectableItem => Boolean(item));
+  const hasLocationRate = selectedPricingEntries.some((entry) => {
+    if (typeof entry.price === "number") return false;
+    const rule = entry.metadata?.pricing;
+    if (rule && typeof rule === "object") {
+      return Number(rule.locationMultipliers?.[zipCode] ?? 1) > 1;
+    }
+    const pricingItem = pricingByCode.get(entry.pricingCode);
+    return locationMultiplierForItem(pricingItem, locationMultiplier) > 1;
+  }) || (useFpoDefaults && canAddPhotoPacks && additionalPhotoPacks > 0 && locationMultiplier > 1);
   const hasFloorPlanService =
-    customTour === "walkthrough" ||
-    customTour === "floorplan-tour" ||
-    (customTour === "components-only" &&
-      selectedCustom.some((id) => id === "tour" || id === "planner"));
+    selectedPackage?.metadata?.provides?.includes("floorplan") ||
+    selectedTourOption?.metadata?.provides?.includes("floorplan") ||
+    selectedAlacarteServices.some((item) => item.metadata?.provides?.includes("floorplan")) ||
+    (isFpoBrand && packageId !== "custom") ||
+    (isFpoBrand && (
+      customTour === "walkthrough" ||
+      customTour === "floorplan-tour" ||
+      (customTour === "components-only" &&
+        selectedCustom.some((id) => id === "tour" || id === "planner"))
+    ));
   const has3DTourService =
-    customTour === "walkthrough" ||
-    (customTour === "components-only" && selectedCustom.includes("tour"));
+    selectedPackage?.metadata?.provides?.includes("3d-tour") ||
+    selectedTourOption?.metadata?.provides?.includes("3d-tour") ||
+    selectedAlacarteServices.some((item) => item.metadata?.provides?.includes("3d-tour")) ||
+    (isFpoBrand && packageId !== "custom") ||
+    (isFpoBrand && (
+      customTour === "walkthrough" ||
+      (customTour === "components-only" && selectedCustom.includes("tour"))
+    ));
+  const providedCapabilities = new Set<string>();
+  for (const service of [selectedPackage, selectedTourOption, ...selectedAlacarteServices]) {
+    for (const capability of service?.metadata?.provides || []) {
+      if (typeof capability === "string") providedCapabilities.add(capability);
+    }
+  }
+  // Keep arbitrary brand-defined requirements usable while preserving the
+  // existing FPO fallback capability rules above.
+  if (hasFloorPlanService) providedCapabilities.add("floorplan");
+  if (has3DTourService) providedCapabilities.add("3d-tour");
+  const unavailableRequirementIds = new Set(
+    [...activeAlacarteDeliverables, ...activeCustomAddons]
+      .filter((item) => (item.requirements || []).some((requirement) => !providedCapabilities.has(requirement)))
+      .map((item) => item.id),
+  );
+  const unavailableRequirementKey = Array.from(unavailableRequirementIds).sort().join("|");
+  const floorPlanDependentIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (isFpoBrand) floorPlanAddonIds.forEach((id) => ids.add(id));
+    for (const item of [...(brandCatalog?.services || []), ...(brandCatalog?.addons || [])]) {
+      if (item.active !== false && item.metadata?.requires?.includes("floorplan")) ids.add(item.key);
+    }
+    return ids;
+  }, [brandCatalog, isFpoBrand]);
+  const threeDTourDependentIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (isFpoBrand) ids.add("tagging");
+    for (const item of [...(brandCatalog?.services || []), ...(brandCatalog?.addons || [])]) {
+      if (item.active !== false && item.metadata?.requires?.includes("3d-tour")) ids.add(item.key);
+    }
+    return ids;
+  }, [brandCatalog, isFpoBrand]);
+  const showAlacarteServices = isFpoBrand
+    ? customTour === "components-only"
+    : activeAlacarteDeliverables.length > 0;
 
   useEffect(() => {
     if (hasFloorPlanService) return;
-    setSelectedCustom((current) =>
-      current.filter((id) => !floorPlanAddonIds.has(id)),
-    );
-  }, [hasFloorPlanService]);
+    setSelectedCustom((current) => current.filter((id) => !floorPlanDependentIds.has(id)));
+  }, [hasFloorPlanService, floorPlanDependentIds]);
 
   useEffect(() => {
     if (has3DTourService) return;
-    setSelectedCustom((current) =>
-      current.filter((id) => id !== "tagging"),
-    );
-  }, [has3DTourService]);
+    setSelectedCustom((current) => current.filter((id) => !threeDTourDependentIds.has(id)));
+  }, [has3DTourService, threeDTourDependentIds]);
+
+  useEffect(() => {
+    if (!unavailableRequirementKey) return;
+    setSelectedCustom((current) => {
+      const next = current.filter((id) => !unavailableRequirementIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [unavailableRequirementKey]);
 
   function priceForCode(code: string) {
     const pricingItem = pricingByCode.get(code);
@@ -397,89 +736,122 @@ export default function Home() {
   const estimate = useMemo(() => {
     const sqft = Math.max(0, squareFeet || 0);
     const largeVenue = sqft > 10000;
-    let amount = 0;
     let requiresReview = false;
     const lineItems: Array<{
       label: string;
       price: number;
       kind: "package" | "addon";
+      key: string;
+      item_type: "product" | "service" | "addon";
+      quantity: number;
+      unit_price_cents: number;
+      line_total_cents: number;
+      catalog_snapshot: unknown;
     }> = [];
 
     if (packageId === "custom") {
-      const selectedTour = customTourOptions.find(
+      const selectedTour = activeTourOptions.find(
         (option) => option.id === customTour,
       );
       if (selectedTour) {
-        const pricingItem = pricingByCode.get(selectedTour.pricingCode);
-        const tourPrice = priceForItem(
-          pricingItem,
-          pricingAreaForItem(pricingItem, sqft, landAreaAcres),
-          pricingConfig.discountTiers,
-          locationMultiplier,
-        );
-        amount += tourPrice;
-        if (tourPrice > 0) {
-          lineItems.push({
-            label: selectedTour.name,
-            price: tourPrice,
-            kind: "package",
-          });
-        }
+        const tourPrice = priceForCatalogEntry(selectedTour);
+        lineItems.push({
+          label: selectedTour.name,
+          price: tourPrice,
+          kind: "package",
+          key: selectedTour.id,
+          item_type: "service",
+          quantity: 1,
+          unit_price_cents: Math.round(tourPrice * 100),
+          line_total_cents: Math.round(tourPrice * 100),
+          catalog_snapshot: selectedTour,
+        });
       }
       if (canAddPhotoPacks) {
-        const photoPackPrice =
-          additionalPhotoPacks *
-          (pricingByCode.get("additional_photos")?.basePrice ?? 50) *
-          locationMultiplier;
-        amount += photoPackPrice;
-        if (photoPackPrice > 0) {
+        const legacyPhotoPackPrice =
+          (pricingByCode.get("additional_photos")?.basePrice ?? 50) * locationMultiplier;
+        const photoPackUnitPrice = photoPackCatalogItem
+          ? priceForCatalogEntry(photoPackCatalogItem)
+          : legacyPhotoPackPrice;
+        const photoPackUnitPriceCents = Math.round(photoPackUnitPrice * 100);
+        const photoPackPriceCents = photoPackUnitPriceCents * additionalPhotoPacks;
+        if (additionalPhotoPacks > 0) {
           lineItems.push({
-            label: `Additional Pro photos · ${additionalPhotoPacks} ${
+            label: `${photoPackCatalogItem?.name || "Additional Pro photos"} · ${additionalPhotoPacks} ${
               additionalPhotoPacks === 1 ? "pack" : "packs"
             }`,
-            price: photoPackPrice,
+            price: photoPackPriceCents / 100,
             kind: "addon",
+            key: "additional-pro-photos",
+            item_type: "addon",
+            quantity: additionalPhotoPacks,
+            unit_price_cents: photoPackUnitPriceCents,
+            line_total_cents: photoPackPriceCents,
+            catalog_snapshot: photoPackCatalogItem || { key: "additional-pro-photos", name: "Additional Pro photos" },
           });
         }
       }
       selectedCustom.forEach((id) => {
-        const item = customDeliverables.find((entry) => entry.id === id);
+        const addonItem = activeCustomAddons.find((entry) => entry.id === id);
+        const item = activeAlacarteDeliverables.find((entry) => entry.id === id) || addonItem;
         if (!item) return;
-        const pricingItem = pricingByCode.get(item.pricingCode);
-        const itemPrice = priceForItem(
-          pricingItem,
-          pricingAreaForItem(pricingItem, sqft, landAreaAcres),
-          pricingConfig.discountTiers,
-          locationMultiplier,
-        );
-        amount += itemPrice;
+        const itemPrice = priceForCatalogEntry(item);
+        const quantity = supportsMultipleUnits(item, Boolean(addonItem))
+          ? Math.min(10000, Math.max(1, Math.floor(addonQuantities[id] || 1)))
+          : 1;
+        const lineTotalCents = Math.round(itemPrice * 100) * quantity;
         lineItems.push({
           label: item.name,
-          price: itemPrice,
-          kind: aLaCarteIds.includes(item.id) ? "package" : "addon",
+          price: lineTotalCents / 100,
+          kind: activeAlacarteIds.includes(item.id) ? "package" : "addon",
+          key: item.id,
+          item_type: activeAlacarteIds.includes(item.id) ? "service" : "addon",
+          quantity,
+          unit_price_cents: Math.round(itemPrice * 100),
+          line_total_cents: lineTotalCents,
+          catalog_snapshot: item,
         });
       });
     } else {
-      const selectedPackage = packages.find((pkg) => pkg.id === packageId);
       if (selectedPackage) {
-        const pricingItem = pricingByCode.get(selectedPackage.pricingCode);
-        const packagePrice = priceForItem(
-          pricingItem,
-          pricingAreaForItem(pricingItem, sqft, landAreaAcres),
-          pricingConfig.discountTiers,
-          locationMultiplier,
-        );
-        amount = packagePrice;
+        const packagePrice = priceForCatalogEntry(selectedPackage);
         lineItems.push({
           label: `${selectedPackage.name} package`,
           price: packagePrice,
           kind: "package",
+          key: selectedPackage.id,
+          item_type: "product",
+          quantity: 1,
+          unit_price_cents: Math.round(packagePrice * 100),
+          line_total_cents: Math.round(packagePrice * 100),
+          catalog_snapshot: selectedPackage,
         });
       }
+      selectedCustom.forEach((id) => {
+        const addonItem = activeCustomAddons.find((entry) => entry.id === id);
+        const item = activeAlacarteDeliverables.find((entry) => entry.id === id) || addonItem;
+        if (!item || (isFpoBrand && item.id === "additional-pro-photos")) return;
+        const itemPrice = priceForCatalogEntry(item);
+        const quantity = supportsMultipleUnits(item, Boolean(addonItem))
+          ? Math.min(10000, Math.max(1, Math.floor(addonQuantities[id] || 1)))
+          : 1;
+        const lineTotalCents = Math.round(itemPrice * 100) * quantity;
+        lineItems.push({
+          label: item.name,
+          price: lineTotalCents / 100,
+          kind: addonItem ? "addon" : "package",
+          key: item.id,
+          item_type: addonItem ? "addon" : "service",
+          quantity,
+          unit_price_cents: Math.round(itemPrice * 100),
+          line_total_cents: lineTotalCents,
+          catalog_snapshot: item,
+        });
+      });
     }
 
     return {
-      amount: Math.round(amount),
+      amount: lineItems.reduce((totalCents, item) => totalCents + item.line_total_cents, 0) / 100,
       requiresReview,
       largeVenue,
       lineItems,
@@ -491,10 +863,17 @@ export default function Home() {
     landAreaAcres,
     packageId,
     selectedCustom,
+    addonQuantities,
     squareFeet,
     pricingByCode,
     pricingConfig.discountTiers,
     locationMultiplier,
+    activePackages,
+    activeTourOptions,
+    activeAlacarteDeliverables,
+    activeCustomAddons,
+    activeAlacarteIds,
+    isFpoBrand,
   ]);
   const taxableSubtotal = estimate.amount;
   const orderTotal = taxableSubtotal + salesTax;
@@ -571,18 +950,37 @@ export default function Home() {
   }
 
   function toggleCustom(id: string) {
+    const item = activeCustomAddons.find((entry) => entry.id === id);
+    const isDeselecting = selectedCustom.includes(id);
     if (id === "photography" && selectedCustom.includes(id)) {
       setAdditionalPhotoPacks(0);
+    }
+    if (item && supportsMultipleUnits(item, activeCustomAddons.some((addon) => addon.id === item.id))) {
+      setAddonQuantities((current) => {
+        if (isDeselecting) {
+          const next = { ...current };
+          delete next[id];
+          return next;
+        }
+        return { ...current, [id]: current[id] || 1 };
+      });
     }
     setSelectedCustom((current) => {
       if (current.includes(id)) {
         return current.filter((item) => item !== id);
       }
-      const exclusiveGroup = exclusiveAddonGroups.find((group) =>
-        group.includes(id),
-      );
-      const compatibleSelections = exclusiveGroup
-        ? current.filter((item) => !exclusiveGroup.includes(item))
+      const catalogExclusiveGroup = activeCustomAddons.find((item) => item.id === id)?.metadata?.exclusiveGroup;
+      const configuredExclusiveIds = typeof catalogExclusiveGroup === "string"
+        ? activeCustomAddons
+            .filter((item) => item.metadata?.exclusiveGroup === catalogExclusiveGroup)
+            .map((item) => item.id)
+        : undefined;
+      const legacyExclusiveIds = isFpoBrand
+        ? exclusiveAddonGroups.find((group) => group.includes(id))
+        : undefined;
+      const exclusiveIds = configuredExclusiveIds || legacyExclusiveIds;
+      const compatibleSelections = exclusiveIds
+        ? current.filter((item) => !exclusiveIds.includes(item))
         : current;
       return [...compatibleSelections, id];
     });
@@ -590,68 +988,91 @@ export default function Home() {
 
   function chooseCustomTour(id: TourOptionId) {
     setCustomTour(id);
-    if (id !== "photo-tour") {
+    const selectedOption = activeTourOptions.find((option) => option.id === id);
+    const supportsPhotoPacks = catalogBrandKey === "floorplanonline" && (
+      useFpoDefaults
+        ? id === "photo-tour"
+        : Boolean(photoPackCatalogItem && selectedOption?.metadata?.allowsPhotoPacks === true)
+    );
+    if (!supportsPhotoPacks) {
       setAdditionalPhotoPacks(0);
     }
-    if (id !== "components-only") {
+    if (isFpoBrand && id !== "components-only") {
       setSelectedCustom((current) =>
-        current.filter((item) => !aLaCarteIds.includes(item)),
+        current.filter((item) => !activeAlacarteIds.includes(item)),
       );
     }
   }
 
-  function renderCustomDeliverable(
-    item: (typeof customDeliverables)[number],
-  ) {
-    const pricingItem = pricingByCode.get(item.pricingCode);
-    const itemLocationMultiplier = locationMultiplierForItem(
-      pricingItem,
-      locationMultiplier,
+  function renderCustomDeliverable(item: ActiveSelectableItem) {
+    const itemPrice = priceForCatalogEntry(item);
+    const quantityEnabled = supportsMultipleUnits(
+      item,
+      activeCustomAddons.some((addon) => addon.id === item.id),
     );
-    const requires3DTour = item.id === "tagging";
+    const requires3DTour = item.requirements?.includes("3d-tour") === true ||
+      (isFpoBrand && item.id === "tagging");
+    const requiresFloorPlan = item.requirements?.includes("floorplan") === true ||
+      (isFpoBrand && floorPlanAddonIds.has(item.id));
     const isDisabled =
-      (floorPlanAddonIds.has(item.id) && !hasFloorPlanService) ||
+      unavailableRequirementIds.has(item.id) ||
+      (requiresFloorPlan && !hasFloorPlanService) ||
       (requires3DTour && !has3DTourService);
     return (
-      <label
-        key={item.id}
-        className={`${selectedCustom.includes(item.id) ? "selected" : ""} ${
-          isDisabled ? "disabled" : ""
-        }`}
-        aria-disabled={isDisabled}
-      >
-        <input
-          type="checkbox"
-          checked={selectedCustom.includes(item.id)}
-          disabled={isDisabled}
-          onChange={() => toggleCustom(item.id)}
-        />
-        <span>
-          <strong>{item.name}</strong>
-          <small>{item.detail}</small>
-          {isDisabled && (
-            <small className="addon-requirement">
-              {requires3DTour
-                ? "Requires a 3D Walkthrough Tour or 3D Tour/Scan."
-                : "Requires a 3D tour or floor plan selection."}
+      <React.Fragment key={item.id}>
+        <label
+          className={`${selectedCustom.includes(item.id) ? "selected" : ""} ${
+            isDisabled ? "disabled" : ""
+          }`}
+          aria-disabled={isDisabled}
+        >
+          <input
+            type="checkbox"
+            checked={selectedCustom.includes(item.id)}
+            disabled={isDisabled}
+            onChange={() => toggleCustom(item.id)}
+          />
+          <span>
+            <strong>{item.name}</strong>
+            <small>{item.detail}</small>
+            {isDisabled && (
+              <small className="addon-requirement">
+                {requires3DTour
+                  ? "Requires a 3D Walkthrough Tour or 3D Tour/Scan."
+                  : requiresFloorPlan
+                    ? "Requires a floor plan service."
+                    : "Requires a 3D tour or floor plan selection."}
+              </small>
+            )}
+            <small className="component-rate">
+              {catalogRateDescription(item)}
             </small>
-          )}
-          <small className="component-rate">
-            {item.id === "tagging"
-              ? `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} base through 2,000 sq ft + ${money((pricingItem?.incrementPrice ?? 0) * itemLocationMultiplier)}/additional 1,000 sq ft - available with 3D Tour options only`
-              : item.type === "flat"
-              ? `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} flat`
-              : item.type === "half-acre"
-                ? `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} covers up to 1/2 acre + ${money((pricingItem?.incrementPrice ?? 0) * itemLocationMultiplier)}/additional 1/2 acre`
-                : `${money((pricingItem?.basePrice ?? 0) * itemLocationMultiplier)} base through 2,000 sq ft + ${money((pricingItem?.incrementPrice ?? 0) * itemLocationMultiplier)}/additional 1,000 sq ft before marginal discounts`}
-          </small>
-        </span>
-        <b>{money(priceForCode(item.pricingCode))}</b>
-      </label>
+          </span>
+          <b>{money(itemPrice * (quantityEnabled && selectedCustom.includes(item.id) ? addonQuantities[item.id] || 1 : 1))}</b>
+        </label>
+        {quantityEnabled && selectedCustom.includes(item.id) && (
+          <div className="addon-quantity">
+            <label htmlFor={`addon-quantity-${item.id}`}>Quantity</label>
+            <input
+              id={`addon-quantity-${item.id}`}
+              type="number"
+              min="1"
+              max="10000"
+              step="1"
+              value={addonQuantities[item.id] || 1}
+              onChange={(event) => setAddonQuantities((current) => ({
+                ...current,
+                [item.id]: Math.min(10000, Math.max(1, Math.floor(Number(event.target.value) || 1))),
+              }))}
+            />
+          </div>
+        )}
+      </React.Fragment>
     );
   }
 
   function reviewOrder(event: React.MouseEvent<HTMLButtonElement>) {
+    if (!catalogReady) return;
     const form = event.currentTarget.form;
     if (!form?.reportValidity()) return;
     setCheckoutStep(2);
@@ -669,16 +1090,25 @@ export default function Home() {
   async function preparePaymentAuthorization(
     event: React.MouseEvent<HTMLButtonElement>,
   ) {
+    if (!catalogReady) return;
     const form = event.currentTarget.form;
     if (!form?.reportValidity()) return;
+    if (taxStatus !== "ready" || !taxCalculationId) {
+      setStripeError("A current tax estimate is required before payment details can be saved. Check the property address and retry.");
+      return;
+    }
+    if (orderTotal < 0.01) {
+      setStripeError("Select at least one priced service or add-on before continuing.");
+      return;
+    }
 
     const formData = new FormData(form);
     const selection =
       packageId === "custom"
         ? `Build your own - ${
-            customTourOptions.find((option) => option.id === customTour)?.name
+            activeTourOptions.find((option) => option.id === customTour)?.name
           }`
-        : `${packages.find((pkg) => pkg.id === packageId)?.name} package`;
+        : `${activePackages.find((pkg) => pkg.id === packageId)?.name} package`;
 
     setStripePreparing(true);
     setStripeError("");
@@ -699,6 +1129,8 @@ export default function Home() {
           estimatedAmountCents: Math.round(orderTotal * 100),
           salesTaxCents: Math.round(salesTax * 100),
           taxCalculationId,
+          requestId: orderRequestId,
+          paymentConsentVersion: COMMERCIAL_PAYMENT_CONSENT_VERSION,
         }),
       });
       const data = (await response.json()) as {
@@ -722,16 +1154,120 @@ export default function Home() {
     }
   }
 
-  function completePaymentAuthorization() {
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  async function persistCommercialOrder(
+    form: HTMLFormElement | null,
+    stripeSetupIntentId?: string,
+  ) {
+    if (!catalogReady) {
+      setSubmissionError(catalogError || "The commercial catalog is not ready. Refresh this page before submitting.");
+      return;
+    }
+    if (!form) {
+      setSubmissionError("We could not read the order details. Please return to the form and try again.");
+      return;
+    }
+
+    const formData = new FormData(form);
+    const value = (name: string) => String(formData.get(name) ?? "").trim();
+    const primaryContactEmail = value("contact-emails").split(",").map((email) => email.trim()).find(Boolean) || "";
+    const selectedPackage = activePackages.find((item) => item.id === packageId);
+    const customTourLabel = activeTourOptions.find((item) => item.id === customTour)?.name;
+    const payload = {
+      request_id: orderRequestId,
+      company: value("company"),
+      project: value("project"),
+      contact_name: value("contact"),
+      contact_email: primaryContactEmail,
+      contact_phone: value("phone"),
+      property_type: propertyType,
+      street: value("address"),
+      city: value("city"),
+      state: value("state").toUpperCase(),
+      zip: value("zip"),
+      building_sq_ft: squareFeet,
+      land_area_acres: landAreaAcres,
+      estimated_subtotal_cents: Math.round(taxableSubtotal * 100),
+      estimated_tax_cents: Math.round(salesTax * 100),
+      estimated_total_cents: Math.round(orderTotal * 100),
+      payment_method: paymentMethod,
+      payment_consent_version: paymentMethod === "stripe" ? COMMERCIAL_PAYMENT_CONSENT_VERSION : undefined,
+      stripe_setup_intent_id: stripeSetupIntentId,
+      order_payload: {
+        form: Object.fromEntries(formData.entries()),
+        billing_name: billingName.trim(),
+        billing_email: billingEmail.trim(),
+        payment_method: paymentMethod,
+        package_id: packageId,
+        package_name: selectedPackage?.name,
+        custom_tour_id: packageId === "custom" ? customTour : null,
+        custom_tour_name: packageId === "custom" ? customTourLabel : null,
+        selected_custom_deliverables: selectedCustom,
+        additional_photo_packs: additionalPhotoPacks,
+        line_items: estimate.lineItems,
+        catalog_snapshot: {
+          product: packageId === "custom" ? null : activePackages.find((item) => item.id === packageId) || null,
+          primary_service: packageId === "custom" ? activeTourOptions.find((item) => item.id === customTour) || null : null,
+          services: activeAlacarteDeliverables.filter((item) => selectedCustom.includes(item.id)),
+          addons: activeCustomAddons.filter((item) => selectedCustom.includes(item.id)),
+        },
+        property_type: propertyType,
+        square_feet: squareFeet,
+        land_area_acres: landAreaAcres,
+        estimated_subtotal: taxableSubtotal,
+        estimated_sales_tax: salesTax,
+        estimated_total: orderTotal,
+        tax_calculation_id: taxCalculationId,
+      },
+    };
+
+    setSubmittingOrder(true);
+    setSubmissionError("");
+    try {
+      const response = await fetch("/api/oms/commercial-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json()) as {
+        commercial_order_request_id?: number;
+        error?: string;
+      };
+      if (!response.ok || !result.commercial_order_request_id) {
+        throw new Error(result.error ?? "The order could not be saved.");
+      }
+      setSubmittedOrderId(result.commercial_order_request_id);
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      setSubmissionError(
+        error instanceof Error ? error.message : "The order could not be saved. Please try again.",
+      );
+    } finally {
+      setSubmittingOrder(false);
+    }
+  }
+
+  function completePaymentAuthorization(setupIntentId?: string) {
+    const form = document.querySelector<HTMLFormElement>("form.order-layout");
+    return persistCommercialOrder(form, setupIntentId);
   }
 
   function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (checkoutStep !== 2 || paymentMethod !== "invoice") return;
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!catalogReady) {
+      setSubmissionError(catalogError || "The commercial catalog is not ready. Refresh this page before submitting.");
+      return;
+    }
+    if (taxStatus !== "ready" || !taxCalculationId) {
+      setSubmissionError("A current property tax estimate is required. Check the property address and refresh the quote.");
+      return;
+    }
+    if (orderTotal < 0.01) {
+      setSubmissionError("Select at least one priced service or add-on before submitting.");
+      return;
+    }
+    void persistCommercialOrder(event.currentTarget);
   }
 
   if (submitted) {
@@ -739,7 +1275,7 @@ export default function Home() {
       <main className="success-page">
         <section className="success-card">
           <div className="brand-mark" aria-hidden="true">
-            FPO
+            {brandName}
           </div>
           <p className="kicker">Commercial project request received</p>
           <h1>Your property is ready for scope review.</h1>
@@ -751,19 +1287,11 @@ export default function Home() {
             project specialist will confirm access, deliverables and final
             pricing.
           </p>
+          {submittedOrderId && <p>OMS request reference: <strong>{submittedOrderId}</strong></p>}
           <div className="success-total">
             <span>Current estimated total</span>
             <strong>{money(orderTotal)}</strong>
           </div>
-          <button
-            className="primary-button"
-            onClick={() => {
-              setSubmitted(false);
-              returnToOrder();
-            }}
-          >
-            Edit request
-          </button>
         </section>
       </main>
     );
@@ -772,13 +1300,12 @@ export default function Home() {
   return (
     <main>
       <section className="order-intro" id="top">
-        <div className="fpo-lockup">
-          <img
-            className="fpo-logo"
-            src="/floorplanonline-logo.png"
-            alt="FloorPlanOnline for Commercial Spaces"
-          />
+        <div className="brand-lockup">
+          {brandLogo ? <img className="brand-logo" src={brandLogo} alt={brandConfig?.logoAlt || brandName} /> :
+            <span className="brand-wordmark">{brandName}</span>}
         </div>
+        {catalogLoading && <p role="status" className="fine-print">Loading the {brandName} commercial catalog…</p>}
+        {catalogError && <p role="alert" className="stripe-error">{catalogError}</p>}
         <div className="order-intro-copy">
           <p className="kicker">Commercial media & property documentation</p>
           <h1>Build your commercial property order</h1>
@@ -891,10 +1418,9 @@ export default function Home() {
                   }
                   placeholder="00000"
                 />
-                {isNycPricing && (
+                {hasLocationRate && (
                   <small className="nyc-pricing-message">
-                    NYC pricing applies: onsite services are priced at 2×;
-                    production-only deliverables remain at standard pricing.
+                    Location-based pricing applies to eligible items for this ZIP code.
                   </small>
                 )}
               </label>
@@ -1034,18 +1560,18 @@ export default function Home() {
               <button
                 type="button"
                 className={packageId !== "custom" ? "selected" : ""}
-                onClick={() => setPackageId("plan")}
+                onClick={() => setPackageId(activePackages[0]?.id || "custom")}
                 aria-pressed={packageId !== "custom"}
               >
-                <strong>All Inclusive</strong>
-                <small>Choose Market, Plan, or Build</small>
+                <strong>Packages</strong>
+                <small>Choose a complete commercial package</small>
               </button>
             </div>
 
             {packageId !== "custom" && (
             <div className="package-grid all-inclusive-grid">
-              {packages.map((pkg) => {
-                const packagePrice = priceForCode(pkg.pricingCode);
+              {activePackages.map((pkg) => {
+                const packagePrice = priceForCatalogEntry(pkg);
                 return (
                   <button
                     type="button"
@@ -1076,31 +1602,58 @@ export default function Home() {
             </div>
             )}
 
+            {packageId !== "custom" && (activeAlacarteDeliverables.length > 0 || selectableCustomAddons.length > 0) && (
+              <div className="custom-builder">
+                {activeAlacarteDeliverables.length > 0 && (
+                  <div className="custom-subsection">
+                    <div className="custom-subsection-heading">
+                      <div>
+                        <span>Optional services</span>
+                        <p>Add services to the selected commercial package.</p>
+                      </div>
+                    </div>
+                    <div className="custom-deliverables">
+                      {activeAlacarteDeliverables.map(renderCustomDeliverable)}
+                    </div>
+                  </div>
+                )}
+                {selectableCustomAddons.length > 0 && (
+                  <div className="custom-subsection">
+                    <div className="custom-subsection-heading">
+                      <div>
+                        <span>Add-ons</span>
+                        <p>Add optional deliverables to the selected package.</p>
+                      </div>
+                    </div>
+                    <div className="custom-deliverables">
+                      {selectableCustomAddons.map(renderCustomDeliverable)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {packageId === "custom" && (
               <div className="custom-builder">
                 <div className="custom-subsection">
                   <div className="custom-subsection-heading">
                     <div>
-                      <span>Choose a primary tour</span>
+                      <span>Choose a primary service</span>
                       <p>
-                        Select one of the three main tour products, or choose
-                        à la carte services below.
+                        Select a primary service and any optional services or add-ons that fit the project.
                       </p>
                     </div>
                   </div>
                   <div className="tour-option-grid">
-                    {customTourOptions.map((option) => {
-                      const optionPrice =
-                        option.id === "components-only"
-                          ? 0
-                          : priceForCode(option.pricingCode);
-                      const pricingItem = pricingByCode.get(option.pricingCode);
+                    {activeTourOptions.map((option) => {
+                      const isAlacartePlaceholder = isFpoBrand && option.id === "components-only";
+                      const optionPrice = isAlacartePlaceholder ? 0 : priceForCatalogEntry(option);
                       return (
                         <button
                           type="button"
                           key={option.id}
                           className={`${customTour === option.id ? "selected" : ""} ${
-                            option.id === "components-only"
+                            isAlacartePlaceholder
                               ? "alacarte-option"
                               : ""
                           }`}
@@ -1119,15 +1672,13 @@ export default function Home() {
                             </ul>
                           )}
                           <b>
-                            {option.id === "components-only"
+                            {isAlacartePlaceholder
                               ? "Click to See Services"
                               : money(optionPrice)}
                           </b>
-                          {option.id !== "components-only" && (
+                          {!isAlacartePlaceholder && (
                             <em>
-                              {pricingItem?.incrementPrice
-                                ? `${money(pricingItem.basePrice * locationMultiplier)} base through 2,000 sq ft + ${money(pricingItem.incrementPrice * locationMultiplier)}/additional 1,000 sq ft before marginal discounts`
-                                : `${money((pricingItem?.basePrice ?? 0) * locationMultiplier)} flat`}
+                              {catalogRateDescription(option)}
                             </em>
                           )}
                         </button>
@@ -1136,19 +1687,20 @@ export default function Home() {
                   </div>
                 </div>
 
-                {customTour === "components-only" && (
+                {showAlacarteServices && (
                   <div className="custom-subsection">
                     <div className="custom-subsection-heading">
                       <div>
-                        <span>Choose à la carte services</span>
+                        <span>{isFpoBrand ? "Choose à la carte services" : "Optional services"}</span>
                         <p>
-                          Select any combination of the three core property
-                          media services.
+                          {isFpoBrand
+                            ? "Select any combination of the three core property media services."
+                            : "Select any additional services for this project."}
                         </p>
                       </div>
                     </div>
                     <div className="custom-deliverables">
-                      {aLaCarteDeliverables.map(renderCustomDeliverable)}
+                      {activeAlacarteDeliverables.map(renderCustomDeliverable)}
                     </div>
                   </div>
                 )}
@@ -1167,15 +1719,12 @@ export default function Home() {
                     {canAddPhotoPacks && (
                       <div className="photo-pack-addon">
                         <span>
-                          <strong>Additional Pro photos</strong>
-                          <small>
-                            Add photos in groups of 5 at $10 per photo.
-                          </small>
+                          <strong>{photoPackCatalogItem?.name || "Additional Pro photos"}</strong>
+                          <small>{photoPackCatalogItem?.detail || "Add photos in groups of 5."}</small>
                           <small className="component-rate">
-                            {money(
-                              (pricingByCode.get("additional_photos")?.basePrice ??
-                                50) * locationMultiplier,
-                            )} per 5-photo pack
+                            {money(photoPackCatalogItem
+                              ? priceForCatalogEntry(photoPackCatalogItem)
+                              : (pricingByCode.get("additional_photos")?.basePrice ?? 50) * locationMultiplier)} per pack
                           </small>
                         </span>
                         <label>
@@ -1221,16 +1770,13 @@ export default function Home() {
                           </div>
                         </label>
                         <b>
-                          {money(
-                            additionalPhotoPacks *
-                              (pricingByCode.get("additional_photos")?.basePrice ??
-                                50) *
-                              locationMultiplier,
-                          )}
+                          {money(additionalPhotoPacks * (photoPackCatalogItem
+                            ? priceForCatalogEntry(photoPackCatalogItem)
+                            : (pricingByCode.get("additional_photos")?.basePrice ?? 50) * locationMultiplier))}
                         </b>
                       </div>
                     )}
-                    {customAddons.map(renderCustomDeliverable)}
+                    {selectableCustomAddons.map(renderCustomDeliverable)}
                   </div>
                 </div>
               </div>
@@ -1283,7 +1829,7 @@ export default function Home() {
                   type="email"
                   placeholder="name@company.com, second@company.com"
                 />
-                <small>You can add multiple emails, separated by a comma.</small>
+                <small>The first address receives the Digital Twin invite. You can add other addresses separated by commas.</small>
               </label>
               <label>
                 Preferred service date
@@ -1405,7 +1951,7 @@ export default function Home() {
                     <button
                       type="button"
                       className="primary-button"
-                      disabled={stripePreparing || taxStatus === "loading"}
+                      disabled={!catalogReady || stripePreparing || taxStatus !== "ready" || !taxCalculationId}
                       onClick={preparePaymentAuthorization}
                     >
                       {stripePreparing
@@ -1417,6 +1963,7 @@ export default function Home() {
                   <StripePaymentSetup
                     billingName={billingName}
                     billingEmail={billingEmail}
+                    companyName={brandName}
                     clientSecret={stripeClientSecret}
                     onComplete={completePaymentAuthorization}
                     publishableKey={stripePublishableKey}
@@ -1457,11 +2004,11 @@ export default function Home() {
             <strong>
               {packageId === "custom"
                 ? `Build your own · ${
-                    customTourOptions.find(
+                    activeTourOptions.find(
                       (option) => option.id === customTour,
                     )?.name
                   }`
-                : packages.find((pkg) => pkg.id === packageId)?.name}
+                : activePackages.find((pkg) => pkg.id === packageId)?.name}
             </strong>
           </div>
           <div className="summary-metric">
@@ -1474,7 +2021,13 @@ export default function Home() {
           </div>
           <div className="summary-metric">
             <span>Location pricing</span>
-            <strong>{isNycPricing ? "NYC · onsite 2×" : "Standard"}</strong>
+            <strong>
+              {hasLocationRate
+                ? catalogBrandKey === "floorplanonline"
+                  ? "Location-adjusted rates"
+                  : "Regional rate applied"
+                : "Standard"}
+            </strong>
           </div>
           <div className="summary-divider" />
           <div className="summary-breakdown">
@@ -1503,7 +2056,7 @@ export default function Home() {
                 : taxStatus === "ready"
                   ? money(salesTax)
                   : taxStatus === "unavailable"
-                    ? "Pending confirmation"
+                    ? "Unable to calculate"
                     : "Calculated at review"}
             </strong>
           </div>
@@ -1521,10 +2074,17 @@ export default function Home() {
               Final total requires scope confirmation.
             </p>
           )}
+          {submissionError && <p className="stripe-error" role="alert">{submissionError}</p>}
+          {taxStatus === "unavailable" && (
+            <p className="stripe-error" role="status">
+              Tax could not be calculated. Check the property address or refresh the page before submitting.
+            </p>
+          )}
           {checkoutStep === 1 ? (
             <button
               className="primary-button"
               type="button"
+              disabled={!catalogReady}
               onClick={reviewOrder}
             >
               Review Order
@@ -1533,9 +2093,9 @@ export default function Home() {
             <button
               className="primary-button"
               type="submit"
-              disabled={taxStatus === "loading"}
+              disabled={!catalogReady || taxStatus !== "ready" || submittingOrder}
             >
-              Submit Service Request
+              {submittingOrder ? "Submitting Service Request…" : "Submit Service Request"}
             </button>
           ) : (
             <p className="summary-action-note">
@@ -1548,6 +2108,20 @@ export default function Home() {
             scope-based item tagging. Final pricing is based on total measured
             building and land area, as applicable.
           </p>
+          {brandConfig?.supportUrl && (
+            <p className="fine-print">
+              Need help? <a href={brandConfig.supportUrl} target="_blank" rel="noreferrer">
+                Contact {brandName} support
+              </a>.
+            </p>
+          )}
+          {(brandConfig?.termsUrl || brandConfig?.privacyUrl) && (
+            <p className="fine-print">
+              {brandConfig.termsUrl && <a href={brandConfig.termsUrl} target="_blank" rel="noreferrer">Terms of Use</a>}
+              {brandConfig.termsUrl && brandConfig.privacyUrl && " · "}
+              {brandConfig.privacyUrl && <a href={brandConfig.privacyUrl} target="_blank" rel="noreferrer">Privacy Policy</a>}
+            </p>
+          )}
         </aside>
       </form>
     </main>
