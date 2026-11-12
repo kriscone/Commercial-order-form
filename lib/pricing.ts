@@ -169,10 +169,9 @@ export function priceForItem(
   let subtotal = pricingItem.basePrice;
 
   if (pricingItem.pricingType === "per_1000_sqft") {
-    const incrementCount = Math.max(
-      0,
-      Math.ceil((sqft - pricingItem.baseCoverage) / pricingItem.incrementSize),
-    );
+    const incrementCount = pricingItem.incrementSize > 0
+      ? Math.max(0, Math.ceil((sqft - pricingItem.baseCoverage) / pricingItem.incrementSize))
+      : 0;
     for (let index = 0; index < incrementCount; index += 1) {
       const incrementEnd = pricingItem.baseCoverage + (index + 1) * pricingItem.incrementSize;
       const tier = tiers.find(
@@ -181,10 +180,9 @@ export function priceForItem(
       subtotal += pricingItem.incrementPrice * (1 - (tier?.discountPercent ?? 0));
     }
   } else if (pricingItem.pricingType === "per_half_acre") {
-    const increments = Math.max(
-      0,
-      Math.ceil((sqft - pricingItem.baseCoverage) / pricingItem.incrementSize),
-    );
+    const increments = pricingItem.incrementSize > 0
+      ? Math.max(0, Math.ceil((sqft - pricingItem.baseCoverage) / pricingItem.incrementSize))
+      : 0;
     subtotal += increments * pricingItem.incrementPrice;
   }
 

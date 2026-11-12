@@ -265,17 +265,25 @@ button {
   padding: 30px 36px;
 }
 
-.fpo-lockup {
+.brand-lockup {
   align-items: center;
   display: flex;
   width: 230px;
 }
 
-.fpo-logo {
+.brand-logo {
   display: block;
   height: auto;
   max-width: 230px;
   width: 100%;
+}
+
+.brand-wordmark {
+  color: var(--night);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
 }
 
 .order-intro-copy {
@@ -879,6 +887,25 @@ legend {
 .custom-deliverables b {
   color: var(--accent-dark);
   font-size: 12px;
+}
+
+.custom-deliverables > .addon-quantity {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: -5px;
+}
+
+.custom-deliverables > .addon-quantity label {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.custom-deliverables > .addon-quantity input {
+  min-height: 36px;
+  padding: 6px 9px;
+  width: 96px;
 }
 
 .photo-pack-addon {
